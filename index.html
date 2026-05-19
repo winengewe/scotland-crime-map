@@ -417,7 +417,19 @@
 
         function openDrawerById(id) { const n = neighborhoodData.find(x => x.regions.id === id); if (n) openDrawer(n, TARGET_COUNT - n.total_crimes, false); }
         function closeDrawer() { document.getElementById('intel-drawer').classList.add('translate-x-full'); highlightLayer.clearLayers(); }
-        function toggleViewMode(m) { viewMode = m; document.querySelectorAll('.view-mode-btn').forEach(b => b.getAttribute('data-mode') === m ? b.classList.add('bg-indigo-600', 'text-white') : b.classList.remove('bg-indigo-600', 'text-white')); renderMap(); }
+        function toggleViewMode(m) { 
+            viewMode = m; 
+            document.querySelectorAll('.view-mode-btn').forEach(b => {
+                if (b.getAttribute('data-mode') === m) {
+                    b.classList.add('bg-indigo-600', 'text-white');
+                    b.classList.remove('bg-white', 'text-slate-500');
+                } else {
+                    b.classList.remove('bg-indigo-600', 'text-white');
+                    b.classList.add('bg-white', 'text-slate-500');
+                }
+            }); 
+            renderMap(); 
+        }
         function toggleCategory(c) { currentCategory = c; document.querySelectorAll('.filter-chip').forEach(ch => ch.innerText === c.toUpperCase() ? ch.classList.add('active') : ch.classList.remove('active')); loadData(); }
         function getIncidentStatus(t) { const l = t.toLowerCase(); if (l.includes('arrested') || l.includes('charged')) return { label: 'ARREST MADE', color: 'bg-emerald-100 text-emerald-700' }; if (l.includes('appeal')) return { label: 'POLICE APPEAL', color: 'bg-indigo-100 text-indigo-700' }; return { label: 'REPORT FILED', color: 'bg-slate-100 text-slate-700' }; }
         function renderUI() { renderMap(); renderTop10s(); updateIntelligenceFeed(); }
