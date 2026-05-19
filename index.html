@@ -398,19 +398,53 @@
         const TARGET_COUNT = 6976;
         let currentCategory = 'Total Crimes', cityData = [], neighborhoodData = [], incidentsData = [], allIncidentsRaw = [], viewMode = 'markers', heatLayer = null;
 
-        function getSafetyColor(rankIndex, total) {
-            const p = ((total - rankIndex) / total) * 100;
-            if (p >= 95) return '#059669'; if (p >= 80) return '#10b981'; if (p >= 60) return '#3b82f6';
-            if (p >= 40) return '#f59e0b'; if (p >= 20) return '#f97316'; return '#ef4444';
+        function getWeightedScore(data) {
+            // Crime Weights
+            const weights = {
+                'Violence': 10,
+                'Sexual Crimes': 10,
+                'Dishonesty': 5,
+                'Damage': 3,
+                'Society': 2,
+                'Antisocial': 1,
+                'Total Crimes': 1 // Fallback
+            };
+            
+            // For neighborhoods (SIMD 2020), we only have 'Neighborhood Rank'
+            // We'll treat a higher rank number as 'Safer' but we must invert it for scoring
+            // For Cities, we have actual counts for categories.
+            
+            if (data.crime_type === 'Neighborhood Rank') {
+                // Neighborhood Rank 1 is most dangerous, 6976 is safest.
+                // We want a 'Danger Score', so Rank 1 = High Score, 6976 = Low Score.
+                return (TARGET_COUNT - data.total_crimes + 1) * 5; // Scaling factor to match city scales
+            }
+
+            // For cities/regions with multiple categories
+            // If we have categories, we should sum them up with weights.
+            // But currently the data is loaded as individual records. 
+            // We need to group them in loadData or use a simplified approach here.
+            return (data.total_crimes || 0) * (weights[data.crime_type] || 1);
         }
 
-        function getSafetyGrade(rankIndex, total) {
-            const p = ((total - rankIndex) / total) * 100;
-            if (p >= 95) return { grade: 'A+', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' };
-            if (p >= 80) return { grade: 'A', color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200' };
-            if (p >= 60) return { grade: 'B', color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' };
-            if (p >= 40) return { grade: 'C', color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-200' };
-            if (p >= 20) return { grade: 'D', color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' };
+        function getSafetyColor(score, maxScore) {
+            // Lower score is better (safer)
+            const p = (score / maxScore) * 100;
+            if (p <= 5) return '#059669'; // Elite Safe
+            if (p <= 20) return '#10b981'; // Very Safe
+            if (p <= 40) return '#3b82f6'; // Safe
+            if (p <= 60) return '#f59e0b'; // Moderate
+            if (p <= 80) return '#f97316'; // Caution
+            return '#ef4444'; // High Activity
+        }
+
+        function getSafetyGrade(score, maxScore) {
+            const p = (score / maxScore) * 100;
+            if (p <= 5) return { grade: 'A+', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+            if (p <= 20) return { grade: 'A', color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+            if (p <= 40) return { grade: 'B', color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' };
+            if (p <= 60) return { grade: 'C', color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-200' };
+            if (p <= 80) return { grade: 'D', color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' };
             return { grade: 'F', color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' };
         }
 
@@ -420,13 +454,31 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         }
 
+        let maxCityScore = 1, maxNbhScore = 1;
+
         async function loadData() {
             debug("Syncing Data...");
             const year = document.getElementById('year-selector').value;
             const statsYear = (year === '2026' || year === '2025') ? '2024/2025' : year;
             try {
-                const { data: cities } = await client.from('crime_stats').select('total_crimes, crime_rate, regions(name, id, latitude, longitude)').eq('crime_type', currentCategory).eq('period', statsYear);
-                cityData = (cities || []).filter(c => c.regions && c.regions.name !== 'Scotland').sort((a,b) => (a.crime_rate || 999) - (b.crime_rate || 999));
+                // Fetch all categories for weighted scoring
+                const { data: allStats } = await client.from('crime_stats').select('total_crimes, crime_type, regions(name, id, latitude, longitude)').eq('period', statsYear);
+                
+                // Group by region to calculate weighted scores
+                const grouped = {};
+                (allStats || []).forEach(s => {
+                    if (!s.regions || s.regions.name === 'Scotland') return;
+                    if (!grouped[s.regions.id]) grouped[s.regions.id] = { stats: [], regions: s.regions, weightedScore: 0 };
+                    grouped[s.regions.id].stats.push(s);
+                    grouped[s.regions.id].weightedScore += getWeightedScore(s);
+                    // For UI display, we still need 'total_crimes' for the selected category
+                    if (s.crime_type === currentCategory) {
+                        grouped[s.regions.id].total_crimes = s.total_crimes;
+                    }
+                });
+
+                cityData = Object.values(grouped).sort((a,b) => a.weightedScore - b.weightedScore);
+                maxCityScore = Math.max(...cityData.map(c => c.weightedScore)) || 1;
                 
                 let q = client.from('incidents').select('*').order('created_at', { ascending: false });
                 if (year !== 'Overall' && year !== '2020') {
@@ -437,12 +489,19 @@
 
                 neighborhoodData = []; let page = 0;
                 while (true) {
-                    const { data, error } = await client.from('crime_stats').select('total_crimes, regions(name, id, latitude, longitude, parent_id)').eq('crime_type', 'Neighborhood Rank').eq('period', '2020').order('total_crimes', { ascending: false }).range(page*1000, (page+1)*1000-1);
+                    const { data, error } = await client.from('crime_stats').select('total_crimes, crime_type, regions(name, id, latitude, longitude, parent_id)').eq('crime_type', 'Neighborhood Rank').eq('period', '2020').order('total_crimes', { ascending: false }).range(page*1000, (page+1)*1000-1);
                     if (error || !data || data.length === 0) break;
-                    neighborhoodData = [...neighborhoodData, ...data.map(n => ({...n, cityName: (cityData.find(c => c.regions.id === n.regions.parent_id))?.regions.name || 'Scotland'}))];
-                    if (page === 0) renderUI();
+                    neighborhoodData = [...neighborhoodData, ...data.map(n => {
+                        const score = getWeightedScore(n);
+                        return {...n, weightedScore: score, cityName: (cityData.find(c => c.regions.id === n.regions.parent_id))?.regions.name || 'Scotland'};
+                    })];
+                    if (page === 0) {
+                        maxNbhScore = Math.max(...neighborhoodData.map(n => n.weightedScore)) || 1;
+                        renderUI();
+                    }
                     page++; if (data.length < 1000) break;
                 }
+                maxNbhScore = Math.max(...neighborhoodData.map(n => n.weightedScore)) || 1;
                 renderUI();
                 document.getElementById('connection-dot').className = "w-2 h-2 rounded-full bg-green-500 border-2 border-white shadow-sm";
             } catch (err) { debug(`Load Err: ${err.message}`); }
@@ -453,22 +512,22 @@
             const year = document.getElementById('year-selector').value;
             markers.clearLayers(); if (heatLayer) map.removeLayer(heatLayer); mapCircles.clear();
             if (viewMode === 'heatmap') {
-                const hp = neighborhoodData.filter(n => n.regions.latitude).map(n => [n.regions.latitude, n.regions.longitude, n.total_crimes/1000]);
+                const hp = neighborhoodData.filter(n => n.regions.latitude).map(n => [n.regions.latitude, n.regions.longitude, n.weightedScore / maxNbhScore]);
                 heatLayer = L.heatLayer(hp, { radius: 25, blur: 15 }).addTo(map);
             } else {
                 neighborhoodData.forEach(n => {
                     if (n.regions.latitude) {
-                        const rank = TARGET_COUNT - n.total_crimes + 1;
-                        const color = getSafetyColor(rank-1, TARGET_COUNT);
+                        const color = getSafetyColor(n.weightedScore, maxNbhScore);
                         const m = L.circleMarker([n.regions.latitude, n.regions.longitude], { radius: 8, fillColor: color, color: "#fff", weight: 2, fillOpacity: 0.8 });
                         markers.addLayer(m); mapCircles.set(n.regions.id, m);
-                        const g = getSafetyGrade(rank-1, TARGET_COUNT);
-                        const p = Math.max(1, Math.round((rank / TARGET_COUNT) * 100));
+                        const g = getSafetyGrade(n.weightedScore, maxNbhScore);
+                        const p = Math.max(1, Math.round((n.weightedScore / maxNbhScore) * 100));
                         const safetyText = p <= 50 ? `Top ${p}% Safest` : `Bottom ${101-p}% (Caution Area)`;
+                        const rank = neighborhoodData.findIndex(x => x.regions.id === n.regions.id) + 1;
                         
                         m.bindPopup(() => {
                             const localIncidents = incidentsData.filter(inc => inc.latitude && getDistance(n.regions.latitude, n.regions.longitude, inc.latitude, inc.longitude) <= 1000).length;
-                            return `<div class="p-4 min-w-[240px]"><div class="flex justify-between items-start mb-2"><div><h4 class="text-sm font-black text-slate-800 uppercase leading-tight">${n.regions.name}</h4><p class="text-[9px] font-bold text-slate-400 uppercase">${n.cityName}</p></div><div class="grade-badge-sm ${g.bg} ${g.color} border border-slate-100">${g.grade}</div></div><div class="border-t pt-2 space-y-1"><div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase"><span>National Rank</span><span>#${rank}</span></div><div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase"><span>Safety Rating</span><span class="${g.color}">${safetyText}</span></div><div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase"><span>Incidents in Area</span><span>${localIncidents}</span></div></div><button onclick="openDrawerById('${n.regions.id}')" class="w-full mt-3 bg-indigo-600 text-white text-[9px] font-black py-2 rounded-lg uppercase">Intelligence Profile</button></div>`;
+                            return `<div class="p-4 min-w-[240px]"><div class="flex justify-between items-start mb-2"><div><h4 class="text-sm font-black text-slate-800 uppercase leading-tight">${n.regions.name}</h4><p class="text-[9px] font-bold text-slate-400 uppercase">${n.cityName}</p></div><div class="grade-badge-sm ${g.bg} ${g.color} border border-slate-100">${g.grade}</div></div><div class="border-t pt-2 space-y-1"><div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase"><span>Safety Rank</span><span>#${rank}</span></div><div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase"><span>Danger Level</span><span class="${g.color}">${safetyText}</span></div><div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase"><span>Incidents in Area</span><span>${localIncidents}</span></div></div><button onclick="openDrawerById('${n.regions.id}')" class="w-full mt-3 bg-indigo-600 text-white text-[9px] font-black py-2 rounded-lg uppercase">Intelligence Profile</button></div>`;
                         }, { className: 'custom-popup' });
                     }
                 });
@@ -497,15 +556,14 @@
                 data.forEach(reg => {
                     const n = neighborhoodData.find(x => x.regions.id === reg.id);
                     if (n) {
-                        const color = getSafetyColor(TARGET_COUNT - n.total_crimes, TARGET_COUNT);
+                        const color = getSafetyColor(n.weightedScore, maxNbhScore);
                         const g = L.geoJSON(reg.boundary, { style: { fillColor: color, weight: 1.5, color: 'white', fillOpacity: 0.35 } });
-                        g.on('click', (e) => { L.DomEvent.stopPropagation(e); openDrawer(n, TARGET_COUNT-n.total_crimes, false); });
+                        g.on('click', (e) => { L.DomEvent.stopPropagation(e); openDrawer(n, neighborhoodData.indexOf(n), false); });
                         boundaryLayer.addLayer(g);
                     }
                 });
             }
         }
-        map.on('moveend', () => { if (document.getElementById('show-boundaries-toggle')?.checked) fetchBoundaries(); });
 
         async function highlightRegion(id, isCity) {
             highlightLayer.clearLayers();
@@ -518,38 +576,26 @@
                 query = query.eq('id', id);
             }
 
-            // Remove limit for highlights to ensure full city coverage
             const { data, error } = await query;
-            if (error || !data || data.length === 0) {
-                debug(`Focus Info: No boundary data in DB for this specific ${isCity ? 'city' : 'spot'} yet.`);
-                return;
-            }
+            if (error || !data || data.length === 0) return;
 
             const group = L.featureGroup();
             data.forEach(reg => {
                 const n = neighborhoodData.find(x => x.regions.id === reg.id);
-                const color = n ? getSafetyColor(TARGET_COUNT - n.total_crimes, TARGET_COUNT) : '#4f46e5';
+                const color = n ? getSafetyColor(n.weightedScore, maxNbhScore) : '#4f46e5';
                 
                 L.geoJSON(reg.boundary, {
                     style: {
                         fillColor: color,
-                        fillOpacity: 0.6, // Higher opacity for focused area
-                        color: '#fbbf24', // Gold highlight
+                        fillOpacity: 0.6,
+                        color: '#fbbf24',
                         weight: 4,
                         dashArray: '5, 10'
                     }
                 }).addTo(group);
             });
             group.addTo(highlightLayer);
-            
-            // Auto-Zoom to fit the selection
-            if (data.length > 0) {
-                map.fitBounds(group.getBounds(), { 
-                    padding: [100, 100],
-                    maxZoom: isCity ? 12 : 16,
-                    animate: true 
-                });
-            }
+            if (data.length > 0) map.fitBounds(group.getBounds(), { padding: [100, 100], maxZoom: isCity ? 12 : 16, animate: true });
         }
 
         function updateIntelligenceFeed() {
