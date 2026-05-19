@@ -246,7 +246,15 @@
                 <button onclick="closeMethodology()" class="p-2 hover:bg-slate-200 rounded-full transition-all text-slate-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             </div>
             
-            <div class="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-8">
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-12">
+                <!-- Mission Statement -->
+                <div class="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100">
+                    <h3 class="text-sm font-black text-indigo-700 uppercase italic mb-3">Why This Exists: The Importance of Open Intelligence</h3>
+                    <p class="text-xs text-slate-600 font-bold leading-relaxed">
+                        In an era of information, safety should never be a mystery. The **Scotland Safety Finder** was built to democratize public safety data, empowering residents, house-hunters, and travelers with the same level of granular insight used by professional analysts. By transforming raw government spreadsheets into an interactive spatial radar, we provide a vital tool for personal security planning and informed community awareness.
+                    </p>
+                </div>
+
                 <!-- Pillars -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div class="space-y-3">
@@ -254,68 +262,115 @@
                             <span class="w-2 h-2 bg-indigo-600 rounded-full"></span> 1. Transparency of Sources
                         </h3>
                         <div class="text-[11px] text-slate-500 font-bold leading-relaxed">
-                            Data is aggregated from official government and law enforcement channels:
+                            We pull data exclusively from verified channels:
                             <ul class="list-disc list-inside mt-2 space-y-1 text-slate-600">
-                                <li>Police Scotland (Open Data)</li>
-                                <li>Scottish Government (SIMD Statistics)</li>
-                                <li>National Records of Scotland (Census)</li>
+                                <li>Police Scotland (Open Data Portal)</li>
+                                <li>Scottish Government (SIMD Statistical Data)</li>
+                                <li>National Records of Scotland (2020/2024 Census)</li>
                             </ul>
                         </div>
                     </div>
                     <div class="space-y-3">
                         <h3 class="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
-                            <span class="w-2 h-2 bg-indigo-600 rounded-full"></span> 2. Methodological Clarity
+                            <span class="w-2 h-2 bg-indigo-600 rounded-full"></span> 2. Methodological Precision
                         </h3>
                         <p class="text-[11px] text-slate-500 font-bold leading-relaxed">
-                            Safety Grades (A+ to F) are calculated via <strong>Per Capita Normalization</strong>. 
-                            We measure incidents per 1,000 residents across 6,976 data zones to ensure fair comparisons.
+                            We use **Per Capita Normalization**. Instead of just counting crimes, we measure incidents per 1,000 residents. This ensures a quiet village and a busy city center are compared fairly on the "Safety Scale."
                         </p>
                     </div>
                     <div class="space-y-3">
                         <h3 class="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
-                            <span class="w-2 h-2 bg-indigo-600 rounded-full"></span> 3. Recency & "Live" Status
+                            <span class="w-2 h-2 bg-indigo-600 rounded-full"></span> 3. Recency & "Live" Logic
                         </h3>
                         <p class="text-[11px] text-slate-500 font-bold leading-relaxed">
-                            Our 2026 Live Feed monitors police appeals and reported incidents in near real-time, 
-                            synchronized with official press releases.
+                            Our **2026 Edition** doesn't just show history; it tracks active police appeals and reported incidents in near real-time, providing immediate situational awareness.
                         </p>
                     </div>
                     <div class="space-y-3">
                         <h3 class="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
-                            <span class="w-2 h-2 bg-indigo-600 rounded-full"></span> 4. Honesty & Validation
+                            <span class="w-2 h-2 bg-indigo-600 rounded-full"></span> 4. Validation & Feedback
                         </h3>
                         <p class="text-[11px] text-slate-500 font-bold leading-relaxed">
-                            Data represents <em>reported</em> incidents. Actual safety varies. 
-                            Found a discrepancy? <a href="https://github.com/winengewe/scotland-crime-map/issues" target="_blank" class="text-indigo-600 underline">Report it on GitHub</a>.
+                            Safety is subjective. If you find a data discrepancy, we encourage community reporting via our <a href="https://github.com/winengewe/scotland-crime-map/issues" target="_blank" class="text-indigo-600 underline">GitHub Issues portal</a> to maintain 100% precision.
                         </p>
                     </div>
                 </div>
 
+                <!-- Detailed Feature Guide -->
                 <div class="border-t border-slate-50 pt-8">
-                    <h3 class="text-sm font-black text-slate-800 uppercase italic mb-6">User Guidelines & Instructions</h3>
-                    <div class="space-y-6">
+                    <h3 class="text-sm font-black text-slate-800 uppercase italic mb-8">Comprehensive Feature Guide</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
                         <div class="flex gap-4">
-                            <div class="w-8 h-8 rounded-full bg-slate-100 flex-shrink-0 flex items-center justify-center font-black text-xs text-slate-500">1</div>
-                            <p class="text-[11px] text-slate-600 font-bold leading-relaxed">
-                                <strong class="text-slate-800 uppercase block mb-1">Search Your Street</strong>
-                                Use the search bar to find specific postcodes or street names. The map will auto-focus and highlight the local "data zone" boundary.
-                            </p>
+                            <div class="w-8 h-8 rounded-xl bg-indigo-600 flex-shrink-0 flex items-center justify-center font-black text-xs text-white shadow-lg shadow-indigo-100">01</div>
+                            <div>
+                                <strong class="text-[10px] text-slate-800 uppercase block mb-1 tracking-widest">Master Search Bar</strong>
+                                <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Type any street, city, or postcode. Our system uses a dual-engine search (local DB + Postcodes.io) to instantly focus the map on your target interest area.</p>
+                            </div>
                         </div>
                         <div class="flex gap-4">
-                            <div class="w-8 h-8 rounded-full bg-slate-100 flex-shrink-0 flex items-center justify-center font-black text-xs text-slate-500">2</div>
-                            <p class="text-[11px] text-slate-600 font-bold leading-relaxed">
-                                <strong class="text-slate-800 uppercase block mb-1">Analyze the Scale</strong>
-                                Green pins represent "Elite Safe" areas (top 5%), while Red pins indicate high-activity zones. Switch between "Markers" and "Heatmap" for different perspectives.
-                            </p>
+                            <div class="w-8 h-8 rounded-xl bg-indigo-600 flex-shrink-0 flex items-center justify-center font-black text-xs text-white shadow-lg shadow-indigo-100">02</div>
+                            <div>
+                                <strong class="text-[10px] text-slate-800 uppercase block mb-1 tracking-widest">Analysis Period Selector</strong>
+                                <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Toggle between **Historical Stats (2020-2025)** and our **Live 2026 Radar**. Historical data shows long-term trends, while Live shows what is happening right now.</p>
+                            </div>
                         </div>
                         <div class="flex gap-4">
-                            <div class="w-8 h-8 rounded-full bg-slate-100 flex-shrink-0 flex items-center justify-center font-black text-xs text-slate-500">3</div>
-                            <p class="text-[11px] text-slate-600 font-bold leading-relaxed">
-                                <strong class="text-slate-800 uppercase block mb-1">Access Intelligence</strong>
-                                Click any spot to open the "Intelligence Profile". Here you can see exact rankings and the history of reported incidents for that specific spot.
-                            </p>
+                            <div class="w-8 h-8 rounded-xl bg-indigo-600 flex-shrink-0 flex items-center justify-center font-black text-xs text-white shadow-lg shadow-indigo-100">03</div>
+                            <div>
+                                <strong class="text-[10px] text-slate-800 uppercase block mb-1 tracking-widest">View Mode Toggles</strong>
+                                <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Switch to **Heatmap** to see high-density "hotspots" across Scotland, or **Markers** to see precise locations of safety data zones and incident reports.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-4">
+                            <div class="w-8 h-8 rounded-xl bg-indigo-600 flex-shrink-0 flex items-center justify-center font-black text-xs text-white shadow-lg shadow-indigo-100">04</div>
+                            <div>
+                                <strong class="text-[10px] text-slate-800 uppercase block mb-1 tracking-widest">Intelligence Profile (Drawer)</strong>
+                                <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Click any pin to open a deep-dive drawer. It shows: **Safety Rank** (National comparison), **Yearly Incidents** (Volume), and a **Local Feed** of recent nearby events.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-4">
+                            <div class="w-8 h-8 rounded-xl bg-indigo-600 flex-shrink-0 flex items-center justify-center font-black text-xs text-white shadow-lg shadow-indigo-100">05</div>
+                            <div>
+                                <strong class="text-[10px] text-slate-800 uppercase block mb-1 tracking-widest">Real-Time Geolocation</strong>
+                                <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Click **"Locate Me"** to sync the map with your current physical position. This allows you to perform an instant safety audit of your immediate surroundings.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-4">
+                            <div class="w-8 h-8 rounded-xl bg-indigo-600 flex-shrink-0 flex items-center justify-center font-black text-xs text-white shadow-lg shadow-indigo-100">06</div>
+                            <div>
+                                <strong class="text-[10px] text-slate-800 uppercase block mb-1 tracking-widest">Category Filters</strong>
+                                <p class="text-[10px] text-slate-500 font-bold leading-relaxed">Filter the entire map by specific crime types like **Violence, Dishonesty, or Antisocial Behaviour** to customize the intelligence to your specific concerns.</p>
+                            </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Interpretation Guide -->
+                <div class="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                    <h3 class="text-[10px] font-black text-slate-800 uppercase italic mb-4">Understanding the Safety Grade</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-black text-emerald-600 uppercase">A+ (Elite Safe)</span>
+                            <span class="text-[9px] font-bold text-slate-400 uppercase italic">Top 5% Safest in Scotland</span>
+                        </div>
+                        <div class="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-emerald-500" style="width: 100%"></div>
+                        </div>
+                        <div class="flex items-center justify-between pt-2">
+                            <span class="text-[10px] font-black text-rose-600 uppercase">F (High Activity)</span>
+                            <span class="text-[9px] font-bold text-slate-400 uppercase italic">Bottom 20% - Frequent Reporting</span>
+                        </div>
+                        <div class="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                            <div class="h-full bg-rose-500" style="width: 20%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Disclaimer -->
+                <div class="pt-4">
+                    <p class="text-[9px] text-slate-400 font-bold leading-relaxed uppercase tracking-tighter text-center">
+                        This site is for informational purposes only. Data is based on reported incidents and census statistics. Actual safety can vary by specific street conditions, lighting, and time of day. Always maintain situational awareness.
+                    </p>
                 </div>
             </div>
             
@@ -524,6 +579,7 @@
                 if (inc.latitude && data.regions.latitude) return getDistance(data.regions.latitude, data.regions.longitude, inc.latitude, inc.longitude) <= 1000;
                 return false;
             });
+            document.getElementById('drawer-live-activity').innerText = rel.length;
             const f = document.getElementById('drawer-feed');
             f.innerHTML = rel.length === 0 ? '<div class="p-8 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">No local reports found</div>' : '';
             rel.forEach(inc => {
