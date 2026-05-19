@@ -56,6 +56,21 @@
         #methodology-modal.hidden { display: none; }
         @keyframes modal-pop { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         .animate-modal { animation: modal-pop 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+        .city-label { background: transparent; border: none; box-shadow: none; pointer-events: none; }
+        .city-label-inner { 
+            padding: 4px 10px; 
+            background: rgba(255,255,255,0.9); 
+            backdrop-filter: blur(8px);
+            border-radius: 20px;
+            border: 2px solid #4f46e5;
+            box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.2);
+            color: #4f46e5;
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            white-space: nowarp;
+        }
     </style>
 </head>
 <body class="bg-[#f8fafc] text-slate-900 leading-normal">
@@ -393,6 +408,7 @@
         map.addLayer(markers);
         const boundaryLayer = L.layerGroup().addTo(map);
         const incidentMarkers = L.layerGroup().addTo(map);
+        const cityLabelsLayer = L.layerGroup().addTo(map);
         const highlightLayer = L.layerGroup().addTo(map);
         const mapCircles = new Map();
         const TARGET_COUNT = 6976;
@@ -511,9 +527,27 @@
             debug("Updating Map...");
             const year = document.getElementById('year-selector').value;
             markers.clearLayers(); if (heatLayer) map.removeLayer(heatLayer); mapCircles.clear();
+            cityLabelsLayer.clearLayers();
+            
             if (viewMode === 'heatmap') {
                 const hp = neighborhoodData.filter(n => n.regions.latitude).map(n => [n.regions.latitude, n.regions.longitude, n.weightedScore / maxNbhScore]);
-                heatLayer = L.heatLayer(hp, { radius: 25, blur: 15 }).addTo(map);
+                heatLayer = L.heatLayer(hp, { radius: 20, blur: 15, maxZoom: 13, max: 1.0, gradient: { 0.4: 'blue', 0.6: 'cyan', 0.7: 'lime', 0.8: 'yellow', 1.0: 'red' } }).addTo(map);
+                
+                // Add City Labels in Heatmap Mode
+                cityData.forEach(c => {
+                    if (c.regions.latitude) {
+                        const label = L.marker([c.regions.latitude, c.regions.longitude], {
+                            icon: L.divIcon({
+                                className: 'city-label',
+                                html: `<div class="city-label-inner">${c.regions.name}</div>`,
+                                iconSize: [0, 0],
+                                iconAnchor: [40, 10]
+                            }),
+                            interactive: false
+                        });
+                        cityLabelsLayer.addLayer(label);
+                    }
+                });
             } else {
                 neighborhoodData.forEach(n => {
                     if (n.regions.latitude) {
