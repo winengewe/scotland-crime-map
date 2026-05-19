@@ -139,10 +139,13 @@
         <section class="bg-white p-2 md:p-4 rounded-[2rem] md:rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden relative">
             <div class="px-4 md:px-8 py-4 md:py-6 border-b border-slate-50 mb-4">
                 <div class="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                    <button class="filter-chip active" onclick="toggleCategory('Total Crimes')">Total Crimes</button>
-                    <button class="filter-chip" onclick="toggleCategory('Violence')">Violence</button>
-                    <button class="filter-chip" onclick="toggleCategory('Dishonesty')">Dishonesty</button>
-                    <button class="filter-chip" onclick="toggleCategory('Society')">Society</button>
+                    <button class="filter-chip active" data-category="Total Crimes" onclick="toggleCategory('Total Crimes')">Total Crimes</button>
+                    <button class="filter-chip" data-category="Violence" onclick="toggleCategory('Violence')">Violence</button>
+                    <button class="filter-chip" data-category="Sexual Crimes" onclick="toggleCategory('Sexual Crimes')">Sexual Crimes</button>
+                    <button class="filter-chip" data-category="Dishonesty" onclick="toggleCategory('Dishonesty')">Dishonesty</button>
+                    <button class="filter-chip" data-category="Damage" onclick="toggleCategory('Damage')">Damage</button>
+                    <button class="filter-chip" data-category="Society" onclick="toggleCategory('Society')">Society</button>
+                    <button class="filter-chip" data-category="Antisocial" onclick="toggleCategory('Antisocial')">Antisocial</button>
                     
                     <div class="flex items-center gap-1 bg-slate-50 p-1 rounded-full border border-slate-100">
                         <button onclick="toggleViewMode('markers')" data-mode="markers" class="view-mode-btn flex items-center gap-1.5 bg-indigo-600 text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-full transition-all shadow-sm">
@@ -553,7 +556,14 @@
             }); 
             renderMap(); 
         }
-        function toggleCategory(c) { currentCategory = c; document.querySelectorAll('.filter-chip').forEach(ch => ch.innerText === c.toUpperCase() ? ch.classList.add('active') : ch.classList.remove('active')); loadData(); }
+        function toggleCategory(c) { 
+            currentCategory = c; 
+            document.querySelectorAll('.filter-chip').forEach(ch => {
+                if (ch.getAttribute('data-category') === c) ch.classList.add('active');
+                else ch.classList.remove('active');
+            });
+            loadData(); 
+        }
         function getIncidentStatus(t) { const l = t.toLowerCase(); if (l.includes('arrested') || l.includes('charged')) return { label: 'ARREST MADE', color: 'bg-emerald-100 text-emerald-700' }; if (l.includes('appeal')) return { label: 'POLICE APPEAL', color: 'bg-indigo-100 text-indigo-700' }; return { label: 'REPORT FILED', color: 'bg-slate-100 text-slate-700' }; }
         function renderUI() { renderMap(); renderTop10s(); updateIntelligenceFeed(); }
         function renderTop10s() { renderInsightList('city-safe-list', cityData.slice(0, 10), 'Safe', 'bg-emerald-50 text-emerald-700', true); renderInsightList('city-caution-list', [...cityData].reverse().slice(0, 10), 'Caution', 'bg-rose-50 text-rose-700', true); renderInsightList('nbh-safe-list', neighborhoodData.slice(0, 10), 'Safe', 'bg-emerald-50 text-emerald-700', false); renderInsightList('nbh-caution-list', [...neighborhoodData].reverse().slice(0, 10), 'Caution', 'bg-rose-50 text-rose-700', false); }
