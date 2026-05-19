@@ -428,8 +428,17 @@
         function toggleViewMode(m) { 
             viewMode = m; 
             document.querySelectorAll('.view-mode-btn').forEach(b => {
-                if (b.getAttribute('data-mode') === m) b.classList.add('active');
-                else b.classList.remove('active');
+                if (b.getAttribute('data-mode') === m) {
+                    b.classList.add('active');
+                    // Add Tailwind active classes for immediate feedback
+                    b.classList.add('bg-indigo-600', 'text-white', 'shadow-sm');
+                    b.classList.remove('bg-white', 'text-slate-500');
+                } else {
+                    b.classList.remove('active');
+                    // Remove Tailwind active classes
+                    b.classList.remove('bg-indigo-600', 'text-white', 'shadow-sm');
+                    b.classList.add('bg-white', 'text-slate-500');
+                }
             }); 
             renderMap(); 
         }
