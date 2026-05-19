@@ -53,6 +53,9 @@
         #intel-drawer.translate-x-full { transform: translateX(100%); }
         .grade-badge-sm { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 0.75rem; font-weight: 900; }
         .leaflet-routing-container { display: none; }
+        #methodology-modal.hidden { display: none; }
+        @keyframes modal-pop { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        .animate-modal { animation: modal-pop 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
     </style>
 </head>
 <body class="bg-[#f8fafc] text-slate-900 leading-normal">
@@ -112,6 +115,11 @@
                         <input type="text" id="master-search" onkeyup="handleSearch(event)" placeholder="Search street or city..." class="bg-slate-50 border border-slate-200 text-xs font-bold py-2.5 px-5 rounded-xl outline-none focus:ring-4 focus:ring-indigo-50 w-full md:w-64 transition-all">
                         <div id="search-results-container" class="custom-scrollbar"></div>
                     </div>
+                    <!-- Methodology Button -->
+                    <button onclick="openMethodology()" class="flex items-center justify-center gap-2 bg-slate-50 text-slate-600 px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 transition-all group w-full md:w-auto">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <span class="text-[10px] font-black uppercase tracking-widest">Data & Methodology</span>
+                    </button>
                     <!-- Share Button -->
                     <button onclick="shareApp()" class="flex items-center justify-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-2.5 rounded-xl border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all group w-full md:w-auto">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
@@ -213,7 +221,104 @@
         </div>
     </div>
 
+    <!-- Methodology Modal -->
+    <div id="methodology-modal" class="fixed inset-0 z-[4000] hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-[2.5rem] w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col border border-slate-100 animate-modal">
+            <div class="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-indigo-600 rounded-2xl shadow-lg">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-black text-slate-800 uppercase italic leading-none">Data & Methodology</h2>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Establishing Trust & Precision</p>
+                    </div>
+                </div>
+                <button onclick="closeMethodology()" class="p-2 hover:bg-slate-200 rounded-full transition-all text-slate-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-8">
+                <!-- Pillars -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="space-y-3">
+                        <h3 class="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                            <span class="w-2 h-2 bg-indigo-600 rounded-full"></span> 1. Transparency of Sources
+                        </h3>
+                        <div class="text-[11px] text-slate-500 font-bold leading-relaxed">
+                            Data is aggregated from official government and law enforcement channels:
+                            <ul class="list-disc list-inside mt-2 space-y-1 text-slate-600">
+                                <li>Police Scotland (Open Data)</li>
+                                <li>Scottish Government (SIMD Statistics)</li>
+                                <li>National Records of Scotland (Census)</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <h3 class="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                            <span class="w-2 h-2 bg-indigo-600 rounded-full"></span> 2. Methodological Clarity
+                        </h3>
+                        <p class="text-[11px] text-slate-500 font-bold leading-relaxed">
+                            Safety Grades (A+ to F) are calculated via <strong>Per Capita Normalization</strong>. 
+                            We measure incidents per 1,000 residents across 6,976 data zones to ensure fair comparisons.
+                        </p>
+                    </div>
+                    <div class="space-y-3">
+                        <h3 class="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                            <span class="w-2 h-2 bg-indigo-600 rounded-full"></span> 3. Recency & "Live" Status
+                        </h3>
+                        <p class="text-[11px] text-slate-500 font-bold leading-relaxed">
+                            Our 2026 Live Feed monitors police appeals and reported incidents in near real-time, 
+                            synchronized with official press releases.
+                        </p>
+                    </div>
+                    <div class="space-y-3">
+                        <h3 class="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                            <span class="w-2 h-2 bg-indigo-600 rounded-full"></span> 4. Honesty & Validation
+                        </h3>
+                        <p class="text-[11px] text-slate-500 font-bold leading-relaxed">
+                            Data represents <em>reported</em> incidents. Actual safety varies. 
+                            Found a discrepancy? <a href="mailto:engwinewe@gmail.com" class="text-indigo-600 underline">Report it here</a>.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-50 pt-8">
+                    <h3 class="text-sm font-black text-slate-800 uppercase italic mb-6">User Guidelines & Instructions</h3>
+                    <div class="space-y-6">
+                        <div class="flex gap-4">
+                            <div class="w-8 h-8 rounded-full bg-slate-100 flex-shrink-0 flex items-center justify-center font-black text-xs text-slate-500">1</div>
+                            <p class="text-[11px] text-slate-600 font-bold leading-relaxed">
+                                <strong class="text-slate-800 uppercase block mb-1">Search Your Street</strong>
+                                Use the search bar to find specific postcodes or street names. The map will auto-focus and highlight the local "data zone" boundary.
+                            </p>
+                        </div>
+                        <div class="flex gap-4">
+                            <div class="w-8 h-8 rounded-full bg-slate-100 flex-shrink-0 flex items-center justify-center font-black text-xs text-slate-500">2</div>
+                            <p class="text-[11px] text-slate-600 font-bold leading-relaxed">
+                                <strong class="text-slate-800 uppercase block mb-1">Analyze the Scale</strong>
+                                Green pins represent "Elite Safe" areas (top 5%), while Red pins indicate high-activity zones. Switch between "Markers" and "Heatmap" for different perspectives.
+                            </p>
+                        </div>
+                        <div class="flex gap-4">
+                            <div class="w-8 h-8 rounded-full bg-slate-100 flex-shrink-0 flex items-center justify-center font-black text-xs text-slate-500">3</div>
+                            <p class="text-[11px] text-slate-600 font-bold leading-relaxed">
+                                <strong class="text-slate-800 uppercase block mb-1">Access Intelligence</strong>
+                                Click any spot to open the "Intelligence Profile". Here you can see exact rankings and the history of reported incidents for that specific spot.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button onclick="closeMethodology()" class="bg-indigo-600 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all">Start Intelligence Scan</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        function openMethodology() { document.getElementById('methodology-modal').classList.remove('hidden'); }
+        function closeMethodology() { document.getElementById('methodology-modal').classList.add('hidden'); }
         const SUPABASE_URL = 'https://hunulwmlmeurkgpdkbhp.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1bnVsd21sbWV1cmtncGRrYmhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5Mzg4MDksImV4cCI6MjA5NDUxNDgwOX0.pNFwpAeocVRCE39EBZXJ7-HF-TXYBMt3ogEeANDsGsM';
         const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
