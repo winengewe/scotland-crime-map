@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scotland Safety Finder | Full Intelligence v1.2-ALPHA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #debug-console {
+            position: fixed; bottom: 20px; right: 20px; width: 320px; max-height: 200px;
+            background: rgba(0,0,0,0.85); color: #0f0; font-family: monospace; font-size: 9px;
+            padding: 12px; border-radius: 12px; z-index: 3000; overflow-y: auto;
+            pointer-events: none; border: 1px solid rgba(0,255,0,0.2); backdrop-filter: blur(4px);
+        }
+    </style>
+    <!-- Plugins -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        #map { height: 600px; width: 100%; border-radius: 1.5rem; border: 1px solid #e2e8f0; background: #f8fafc; }
+        @media (max-width: 768px) {
+            #map { height: 400px; border-radius: 1rem; }
+            #intel-drawer { width: 100% !important; }
+            #search-results-container { width: calc(100% - 48px); right: 24px; top: 120px; }
+            #debug-console { width: calc(100% - 40px); left: 20px; bottom: 10px; }
+            .container { padding-left: 1rem; padding-right: 1rem; }
+            section { border-radius: 1.5rem !important; }
+            header { padding-left: 1rem !important; padding-right: 1rem !important; }
+            #intel-drawer .p-6 { padding: 1rem !important; }
+            #intel-drawer .space-y-8 { space-y: 1.5rem !important; }
+        }
+        .custom-popup .leaflet-popup-content-wrapper { border-radius: 1rem; padding: 0.5rem; border: none; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .ranking-card:hover { transform: translateY(-2px); transition: all 0.2s ease; box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.1); }
+        #search-results-container { position: absolute; top: 70px; right: 24px; width: 320px; max-height: 400px; background: white; z-index: 1001; border-radius: 1.5rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); border: 1px solid #f1f5f9; display: none; overflow-y: auto; }
+        .filter-chip { padding: 0.5rem 1rem; border-radius: 9999px; background: #f1f5f9; color: #64748b; font-size: 0.625rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.2s ease; cursor: pointer; border: 1px solid transparent; }
+        .filter-chip.active { background: #4f46e5; color: white; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
+        .grade-badge { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 1.5rem; font-weight: 900; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border: 2px solid white; }
+        #intel-drawer { position: fixed; top: 0; right: 0; width: 400px; height: 100%; background: white; z-index: 2000; box-shadow: -10px 0 50px rgba(0,0,0,0.1); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-left: 1px solid #f1f5f9; display: flex; flex-direction: column; }
+        #intel-drawer.translate-x-full { transform: translateX(100%); }
+        .grade-badge-sm { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 0.75rem; font-weight: 900; }
+        .leaflet-routing-container { display: none; }
+    </style>
+</head>
+<body class="bg-[#f8fafc] text-slate-900 leading-normal">
+    <div id="debug-console">Initializing Radar v1.2...</div>
+    <script>
+        function debug(msg) {
+            const el = document.getElementById('debug-console');
+            if (el) { el.innerHTML += `<div>> ${msg}</div>`; el.scrollTop = el.scrollHeight; }
+            console.log("DEBUG:", msg);
+        }
+        window.onerror = (m, s, l, c, e) => debug(`ERR: ${m} at ${l}:${c}`);
+    </script>
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-100 sticky top-0 z-[1000] px-6 py-4 shadow-sm">
+        <div class="container mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-100">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-tight text-slate-800 uppercase italic leading-none">Scotland Safety Finder</h1>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span id="connection-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        <p id="timeframe-label" class="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Syncing Intelligence...</p>
+                        <div id="global-pulse-chip" class="hidden flex items-center gap-1.5 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 ml-2">
+                             <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>
+                             <span id="global-pulse-count" class="text-[8px] font-black text-blue-600 uppercase">0 Alerts</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-center md:justify-end gap-3 md:gap-6 w-full md:w-auto">
+                <div class="flex flex-col items-center md:items-end">
+                    <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Analysis Period</span>
+                    <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 mr-2">
+                            <input type="checkbox" id="show-boundaries-toggle" onchange="renderMap()" class="w-3 h-3 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer">
+                            <label for="show-boundaries-toggle" class="text-[9px] font-black text-slate-500 uppercase tracking-widest cursor-pointer">Show Boundaries</label>
+                        </div>
+                        <select id="year-selector" onchange="loadData()" class="bg-slate-50 border border-slate-200 text-[10px] font-black uppercase py-1.5 px-3 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer">
+                            <option value="2026" selected>2026 (Live)</option>
+                            <option value="2024/2025">2025</option>
+                            <option value="2023/2024">2024</option>
+                            <option value="2022/2023">2023</option>
+                            <option value="2021/2022">2022</option>
+                            <option value="Overall">Overall Baseline</option>
+                            <option value="2020">SIMD Census</option>
+                        </select>
+                    </div>
+                </div>
+                    <div class="hidden lg:block w-32 h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <div id="sync-bar" class="h-full bg-indigo-500 transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                    <div class="relative w-full md:w-auto">
+                        <input type="text" id="master-search" onkeyup="handleSearch(event)" placeholder="Search street or city..." class="bg-slate-50 border border-slate-200 text-xs font-bold py-2.5 px-5 rounded-xl outline-none focus:ring-4 focus:ring-indigo-50 w-full md:w-64 transition-all">
+                        <div id="search-results-container" class="custom-scrollbar"></div>
+                    </div>
+                    <!-- Share Button -->
+                    <button onclick="shareApp()" class="flex items-center justify-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-2.5 rounded-xl border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all group w-full md:w-auto">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
+                        <span class="text-[10px] font-black uppercase tracking-widest">Share Radar</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Toast Notification Container -->
+        <div id="toast-container" class="fixed top-24 left-1/2 -translate-x-1/2 z-[3001] pointer-events-none"></div>
+
+    <main class="container mx-auto py-10 px-6 space-y-12">
+        <!-- Map -->
+        <section class="bg-white p-2 md:p-4 rounded-[2rem] md:rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden relative">
+            <div class="px-4 md:px-8 py-4 md:py-6 border-b border-slate-50 mb-4">
+                <div class="flex flex-wrap items-center justify-center md:justify-start gap-2">
+                    <button class="filter-chip active" onclick="toggleCategory('Total Crimes')">Total Crimes</button>
+                    <button class="filter-chip" onclick="toggleCategory('Violence')">Violence</button>
+                    <button class="filter-chip" onclick="toggleCategory('Dishonesty')">Dishonesty</button>
+                    <button class="filter-chip" onclick="toggleCategory('Society')">Society</button>
+                    
+                    <div class="flex items-center gap-1 bg-slate-50 p-1 rounded-full border border-slate-100">
+                        <button onclick="toggleViewMode('markers')" data-mode="markers" class="view-mode-btn bg-indigo-600 text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-full transition-all">Markers</button>
+                        <button onclick="toggleViewMode('heatmap')" data-mode="heatmap" class="view-mode-btn bg-white text-slate-500 text-[8px] font-black uppercase px-3 py-1.5 rounded-full transition-all">Heatmap</button>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-full border border-slate-100">
+                        <input type="checkbox" id="show-incidents-toggle" onchange="renderMap()" class="w-3 h-3 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer">
+                        <label for="show-incidents-toggle" id="incident-toggle-label" class="text-[9px] font-black text-slate-500 uppercase tracking-widest cursor-pointer">Show Reports</label>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-center md:justify-start gap-x-4 gap-y-2 mt-4 pt-4 border-t border-slate-50">
+                    <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest mr-2">Safety Scale:</span>
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-50/50 border border-emerald-100/50"><div class="w-2 h-2 rounded-full" style="background: #059669"></div><span class="text-[8px] font-black text-emerald-700 uppercase">Elite Safe</span></div>
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-green-50/50 border border-green-100/50"><div class="w-2 h-2 rounded-full" style="background: #10b981"></div><span class="text-[8px] font-black text-green-700 uppercase">Very Safe</span></div>
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-50/50 border border-blue-100/50"><div class="w-2 h-2 rounded-full" style="background: #3b82f6"></div><span class="text-[8px] font-black text-blue-700 uppercase">Safe</span></div>
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-50/50 border border-amber-100/50"><div class="w-2 h-2 rounded-full" style="background: #f59e0b"></div><span class="text-[8px] font-black text-amber-700 uppercase">Moderate</span></div>
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-orange-50/50 border border-orange-100/50"><div class="w-2 h-2 rounded-full" style="background: #f97316"></div><span class="text-[8px] font-black text-orange-700 uppercase">Caution</span></div>
+                    <div class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-rose-50/50 border border-rose-100/50"><div class="w-2 h-2 rounded-full" style="background: #ef4444"></div><span class="text-[8px] font-black text-rose-700 uppercase">High Activity</span></div>
+                </div>
+            </div>
+            <div id="map"></div>
+        </section>
+
+        <!-- Insights -->
+        <section class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            <div class="xl:col-span-2 space-y-12">
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-black text-slate-800 tracking-tighter uppercase">City Overview <span id="city-count" class="text-sm font-bold text-slate-400 ml-2"></span></h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-emerald-500 shadow-sm"><h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Safest Cities</h3><div id="city-safe-list" class="space-y-2"></div></div>
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-rose-500 shadow-sm"><h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Caution Cities</h3><div id="city-caution-list" class="space-y-2"></div></div>
+                    </div>
+                </div>
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-black text-slate-800 tracking-tighter uppercase">Micro-Spots <span id="nbh-count" class="text-sm font-bold text-slate-400 ml-2"></span></h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-emerald-500 shadow-sm"><h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Safest Spots</h3><div id="nbh-safe-list" class="space-y-2"></div></div>
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-rose-500 shadow-sm"><h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Caution Spots</h3><div id="nbh-caution-list" class="space-y-2"></div></div>
+                    </div>
+                </div>
+            </div>
+            <!-- SIDEBAR FEED -->
+            <div class="space-y-6">
+                <h2 class="text-2xl font-black text-slate-800 tracking-tighter uppercase italic">Intelligence</h2>
+                <div class="bg-white p-6 rounded-2xl md:rounded-3xl border border-slate-100 border-t-4 border-t-indigo-500 shadow-sm h-[500px] md:h-[740px] flex flex-col">
+                    <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic" id="feed-title">Latest Reports</h3>
+                    <div id="intelligence-feed" class="space-y-4 overflow-y-auto custom-scrollbar flex-1 pr-2">
+                        <div class="p-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Awaiting Sync...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Intelligence Drawer -->
+    <div id="intel-drawer" class="translate-x-full">
+        <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div class="flex items-center gap-4">
+                <div id="drawer-grade-box" class="grade-badge"><span id="drawer-grade">-</span></div>
+                <div><h2 id="drawer-name" class="text-lg font-black text-slate-800 uppercase leading-tight">Area Name</h2><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Intelligence Profile</p></div>
+            </div>
+            <button onclick="closeDrawer()" class="p-2 hover:bg-slate-200 rounded-full transition-all text-slate-400"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        </div>
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+            <div class="grid grid-cols-3 gap-3">
+                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100"><p class="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-tight">Safety<br>Rank</p><p id="drawer-percentile" class="text-sm font-black text-slate-800">-</p></div>
+                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100"><p class="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-tight">Yearly<br>Incidents</p><p id="drawer-total-incidents" class="text-sm font-black text-slate-800">-</p></div>
+                <div class="bg-slate-50 p-3 rounded-2xl border border-indigo-100 bg-indigo-50/30"><div class="flex items-center gap-1 mb-1"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span><p class="text-[8px] font-black text-blue-600 uppercase tracking-widest leading-tight">Recent<br>Reports</p></div><p id="drawer-live-activity" class="text-sm font-black text-blue-700">0</p></div>
+            </div>
+            <div><h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 italic">Area Feed</h3><div id="drawer-feed" class="space-y-3"></div></div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://hunulwmlmeurkgpdkbhp.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1bnVsd21sbWV1cmtncGRrYmhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5Mzg4MDksImV4cCI6MjA5NDUxNDgwOX0.pNFwpAeocVRCE39EBZXJ7-HF-TXYBMt3ogEeANDsGsM';
+        const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const map = L.map('map', { zoomControl: true, attributionControl: false }).setView([56.8, -4.2], 6);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
+        const markers = L.markerClusterGroup({ showCoverageOnHover: false });
+        map.addLayer(markers);
+        const boundaryLayer = L.layerGroup().addTo(map);
+        const incidentMarkers = L.layerGroup().addTo(map);
+        const highlightLayer = L.layerGroup().addTo(map);
+        const mapCircles = new Map();
+        const TARGET_COUNT = 6976;
+        let currentCategory = 'Total Crimes', cityData = [], neighborhoodData = [], incidentsData = [], allIncidentsRaw = [], viewMode = 'markers', heatLayer = null;
+
+        function getSafetyColor(rankIndex, total) {
+            const p = ((total - rankIndex) / total) * 100;
+            if (p >= 95) return '#059669'; if (p >= 80) return '#10b981'; if (p >= 60) return '#3b82f6';
+            if (p >= 40) return '#f59e0b'; if (p >= 20) return '#f97316'; return '#ef4444';
+        }
+
+        function getSafetyGrade(rankIndex, total) {
+            const p = ((total - rankIndex) / total) * 100;
+            if (p >= 95) return { grade: 'A+', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+            if (p >= 80) return { grade: 'A', color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+            if (p >= 60) return { grade: 'B', color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' };
+            if (p >= 40) return { grade: 'C', color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-200' };
+            if (p >= 20) return { grade: 'D', color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' };
+            return { grade: 'F', color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' };
+        }
+
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; const dLat = (lat2-lat1)*Math.PI/180; const dLon = (lon2-lon1)*Math.PI/180;
+            const a = Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        async function loadData() {
+            debug("Syncing Data...");
+            const year = document.getElementById('year-selector').value;
+            const statsYear = (year === '2026' || year === '2025') ? '2024/2025' : year;
+            try {
+                const { data: cities } = await client.from('crime_stats').select('total_crimes, crime_rate, regions(name, id, latitude, longitude)').eq('crime_type', currentCategory).eq('period', statsYear);
+                cityData = (cities || []).filter(c => c.regions && c.regions.name !== 'Scotland').sort((a,b) => (a.crime_rate || 999) - (b.crime_rate || 999));
+                
+                let q = client.from('incidents').select('*').order('created_at', { ascending: false });
+                if (year !== 'Overall' && year !== '2020') {
+                    const ty = year.includes('/') ? year.split('/')[1] : year;
+                    q = q.gte('created_at', `${ty}-01-01`).lte('created_at', `${ty}-12-31`);
+                } else if (year === 'Overall') { q = q.limit(1000); }
+                const { data: incs } = await q; incidentsData = incs || [];
+
+                neighborhoodData = []; let page = 0;
+                while (true) {
+                    const { data, error } = await client.from('crime_stats').select('total_crimes, regions(name, id, latitude, longitude, parent_id)').eq('crime_type', 'Neighborhood Rank').eq('period', '2020').order('total_crimes', { ascending: false }).range(page*1000, (page+1)*1000-1);
+                    if (error || !data || data.length === 0) break;
+                    neighborhoodData = [...neighborhoodData, ...data.map(n => ({...n, cityName: (cityData.find(c => c.regions.id === n.regions.parent_id))?.regions.name || 'Scotland'}))];
+                    if (page === 0) renderUI();
+                    page++; if (data.length < 1000) break;
+                }
+                renderUI();
+                document.getElementById('connection-dot').className = "w-2 h-2 rounded-full bg-green-500 border-2 border-white shadow-sm";
+            } catch (err) { debug(`Load Err: ${err.message}`); }
+        }
+
+        function renderMap() {
+            debug("Updating Map...");
+            const year = document.getElementById('year-selector').value;
+            markers.clearLayers(); if (heatLayer) map.removeLayer(heatLayer); mapCircles.clear();
+            if (viewMode === 'heatmap') {
+                const hp = neighborhoodData.filter(n => n.regions.latitude).map(n => [n.regions.latitude, n.regions.longitude, n.total_crimes/1000]);
+                heatLayer = L.heatLayer(hp, { radius: 25, blur: 15 }).addTo(map);
+            } else {
+                neighborhoodData.forEach(n => {
+                    if (n.regions.latitude) {
+                        const rank = TARGET_COUNT - n.total_crimes + 1;
+                        const color = getSafetyColor(rank-1, TARGET_COUNT);
+                        const m = L.circleMarker([n.regions.latitude, n.regions.longitude], { radius: 8, fillColor: color, color: "#fff", weight: 2, fillOpacity: 0.8 });
+                        markers.addLayer(m); mapCircles.set(n.regions.id, m);
+                        const g = getSafetyGrade(rank-1, TARGET_COUNT);
+                        m.bindPopup(`<div class="p-4 min-w-[240px]"><div class="flex justify-between items-start mb-2"><div><h4 class="text-sm font-black text-slate-800 uppercase leading-tight">${n.regions.name}</h4><p class="text-[9px] font-bold text-slate-400 uppercase">${n.cityName}</p></div><div class="grade-badge-sm ${g.bg} ${g.color} border border-slate-100">${g.grade}</div></div><div class="border-t pt-2 space-y-1"><div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase"><span>National Rank</span><span>#${rank}</span></div><div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase"><span>Safety</span><span class="${g.color}">${Math.round((TARGET_COUNT-rank)/TARGET_COUNT*100)}%</span></div></div><button onclick="openDrawerById('${n.regions.id}')" class="w-full mt-3 bg-indigo-600 text-white text-[9px] font-black py-2 rounded-lg uppercase">Intelligence</button></div>`, { className: 'custom-popup' });
+                    }
+                });
+            }
+            incidentMarkers.clearLayers(); boundaryLayer.clearLayers();
+            document.getElementById('incident-toggle-label').innerText = year === '2026' ? 'Show Live Reports (2026)' : `Show ${year} Reports`;
+            if (document.getElementById('show-boundaries-toggle')?.checked) fetchBoundaries();
+            if (document.getElementById('show-incidents-toggle')?.checked) {
+                incidentsData.forEach(inc => {
+                    if (inc.latitude && inc.longitude) {
+                        const s = getIncidentStatus(inc.title);
+                        const m = L.marker([inc.latitude, inc.longitude], { icon: L.divIcon({ className: 'custom-m', html: `<div class="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>`, iconSize: [16, 16] }) });
+                        m.bindPopup(`<div class="p-2 min-w-[200px]"><span class="text-[8px] font-black ${s.color} px-2 py-0.5 rounded-full uppercase">${s.label}</span><h4 class="text-xs font-black text-slate-800 mt-2 uppercase">${inc.title}</h4><a href="${inc.url}" target="_blank" class="block text-center mt-2 text-[9px] font-black text-indigo-600 uppercase">Source &rarr;</a></div>`, { className: 'custom-popup' });
+                        incidentMarkers.addLayer(m);
+                    }
+                });
+            }
+        }
+
+        async function fetchBoundaries() {
+            debug("Fetching Viewport Boundaries...");
+            const b = map.getBounds();
+            const { data, error } = await client.from('regions').select('id, name, boundary').not('boundary', 'is', null).gte('latitude', b.getSouth()).lte('latitude', b.getNorth()).gte('longitude', b.getWest()).lte('longitude', b.getEast()).limit(400);
+            if (!error && data) {
+                boundaryLayer.clearLayers();
+                data.forEach(reg => {
+                    const n = neighborhoodData.find(x => x.regions.id === reg.id);
+                    if (n) {
+                        const color = getSafetyColor(TARGET_COUNT - n.total_crimes, TARGET_COUNT);
+                        const g = L.geoJSON(reg.boundary, { style: { fillColor: color, weight: 1.5, color: 'white', fillOpacity: 0.35 } });
+                        g.on('click', (e) => { L.DomEvent.stopPropagation(e); openDrawer(n, TARGET_COUNT-n.total_crimes, false); });
+                        boundaryLayer.addLayer(g);
+                    }
+                });
+            }
+        }
+        map.on('moveend', () => { if (document.getElementById('show-boundaries-toggle')?.checked) fetchBoundaries(); });
+
+        async function highlightRegion(id, isCity) {
+            highlightLayer.clearLayers();
+            debug(`Smart Focus: ${isCity ? 'City' : 'Spot'} Mode...`);
+            
+            let query = client.from('regions').select('id, boundary').not('boundary', 'is', null);
+            if (isCity) {
+                query = query.eq('parent_id', id);
+            } else {
+                query = query.eq('id', id);
+            }
+
+            // Remove limit for highlights to ensure full city coverage
+            const { data, error } = await query;
+            if (error || !data || data.length === 0) {
+                debug(`Focus Info: No boundary data in DB for this specific ${isCity ? 'city' : 'spot'} yet.`);
+                return;
+            }
+
+            const group = L.featureGroup();
+            data.forEach(reg => {
+                const n = neighborhoodData.find(x => x.regions.id === reg.id);
+                const color = n ? getSafetyColor(TARGET_COUNT - n.total_crimes, TARGET_COUNT) : '#4f46e5';
+                
+                L.geoJSON(reg.boundary, {
+                    style: {
+                        fillColor: color,
+                        fillOpacity: 0.6, // Higher opacity for focused area
+                        color: '#fbbf24', // Gold highlight
+                        weight: 4,
+                        dashArray: '5, 10'
+                    }
+                }).addTo(group);
+            });
+            group.addTo(highlightLayer);
+            
+            // Auto-Zoom to fit the selection
+            if (data.length > 0) {
+                map.fitBounds(group.getBounds(), { 
+                    padding: [100, 100],
+                    maxZoom: isCity ? 12 : 16,
+                    animate: true 
+                });
+            }
+        }
+
+        function updateIntelligenceFeed() {
+            const container = document.getElementById('intelligence-feed');
+            const year = document.getElementById('year-selector').value;
+            document.getElementById('feed-title').innerText = year === '2026' ? 'Latest Live Reports' : `${year} Historical Feed`;
+            if (incidentsData.length === 0) { container.innerHTML = `<div class="p-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">No reports for ${year} in this area</div>`; return; }
+            container.innerHTML = '';
+            incidentsData.slice(0, 50).forEach(inc => {
+                const s = getIncidentStatus(inc.title);
+                const item = document.createElement('div');
+                item.className = 'p-4 bg-slate-50/50 rounded-2xl border border-slate-100 hover:border-indigo-200 cursor-pointer group';
+                item.onclick = () => { if (inc.latitude) map.flyTo([inc.latitude, inc.longitude], 14); };
+                item.innerHTML = `<div class="flex items-center justify-between mb-2"><span class="text-[8px] font-black ${s.color} px-2 py-0.5 rounded-full uppercase">${s.label}</span><span class="text-[9px] font-bold text-slate-400 uppercase">${new Date(inc.created_at).toLocaleDateString()}</span></div><h4 class="text-[11px] font-black text-slate-800 leading-tight mb-2 uppercase group-hover:text-indigo-600 transition-colors">${inc.title}</h4><div class="flex items-center justify-between"><span class="text-[8px] font-bold text-slate-400 uppercase">${inc.city || 'Scotland'}</span><span class="text-[9px] font-black text-indigo-500 uppercase tracking-widest group-hover:underline">Track &rarr;</span></div>`;
+                container.appendChild(item);
+            });
+        }
+
+        async function openDrawer(data, rankIndex, isCity) {
+            const drawer = document.getElementById('intel-drawer');
+            const total = isCity ? cityData.length : TARGET_COUNT;
+            const g = getSafetyGrade(rankIndex, total);
+            const p = Math.round(((total - rankIndex) / total) * 100);
+            document.getElementById('drawer-grade').innerText = g.grade;
+            document.getElementById('drawer-grade-box').className = `grade-badge ${g.bg} ${g.color} ${g.border}`;
+            document.getElementById('drawer-name').innerText = data.regions.name;
+            document.getElementById('drawer-percentile').innerText = `Top ${p}% Safest`;
+            document.getElementById('drawer-percentile').className = `text-lg font-black ${g.color}`;
+            document.getElementById('drawer-total-incidents').innerText = isCity ? data.total_crimes.toLocaleString() : "N/A";
+            highlightRegion(data.regions.id, isCity);
+            const rel = incidentsData.filter(inc => {
+                if (isCity) return (inc.city || "").toLowerCase().includes(data.regions.name.toLowerCase().split(' - ')[0]);
+                if (inc.latitude && data.regions.latitude) return getDistance(data.regions.latitude, data.regions.longitude, inc.latitude, inc.longitude) <= 1000;
+                return false;
+            });
+            const f = document.getElementById('drawer-feed');
+            f.innerHTML = rel.length === 0 ? '<div class="p-8 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">No local reports found</div>' : '';
+            rel.forEach(inc => {
+                const s = getIncidentStatus(inc.title);
+                const i = document.createElement('div');
+                i.className = 'p-4 bg-slate-50/50 rounded-2xl border border-slate-100 mb-3 hover:border-indigo-200 cursor-pointer';
+                i.onclick = () => window.open(inc.url, '_blank');
+                i.innerHTML = `<div class="flex items-center justify-between mb-2"><span class="text-[8px] font-black ${s.color} px-2 py-0.5 rounded-full uppercase">${s.label}</span><span class="text-[9px] font-bold text-slate-400 uppercase">${new Date(inc.created_at).toLocaleDateString()}</span></div><h4 class="text-xs font-bold text-slate-800 leading-tight mb-2 uppercase group-hover:text-indigo-600 transition-colors">${inc.title}</h4><span class="text-[9px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Read More &rarr;</span>`;
+                f.appendChild(i);
+            });
+            drawer.classList.remove('translate-x-full');
+        }
+
+        function openDrawerById(id) { const n = neighborhoodData.find(x => x.regions.id === id); if (n) openDrawer(n, TARGET_COUNT - n.total_crimes, false); }
+        function closeDrawer() { document.getElementById('intel-drawer').classList.add('translate-x-full'); highlightLayer.clearLayers(); }
+        function toggleViewMode(m) { viewMode = m; document.querySelectorAll('.view-mode-btn').forEach(b => b.getAttribute('data-mode') === m ? b.classList.add('bg-indigo-600', 'text-white') : b.classList.remove('bg-indigo-600', 'text-white')); renderMap(); }
+        function toggleCategory(c) { currentCategory = c; document.querySelectorAll('.filter-chip').forEach(ch => ch.innerText === c.toUpperCase() ? ch.classList.add('active') : ch.classList.remove('active')); loadData(); }
+        function getIncidentStatus(t) { const l = t.toLowerCase(); if (l.includes('arrested') || l.includes('charged')) return { label: 'ARREST MADE', color: 'bg-emerald-100 text-emerald-700' }; if (l.includes('appeal')) return { label: 'POLICE APPEAL', color: 'bg-indigo-100 text-indigo-700' }; return { label: 'REPORT FILED', color: 'bg-slate-100 text-slate-700' }; }
+        function renderUI() { renderMap(); renderTop10s(); updateIntelligenceFeed(); }
+        function renderTop10s() { renderInsightList('city-safe-list', cityData.slice(0, 10), 'Safe', 'bg-emerald-50 text-emerald-700', true); renderInsightList('city-caution-list', [...cityData].reverse().slice(0, 10), 'Caution', 'bg-rose-50 text-rose-700', true); renderInsightList('nbh-safe-list', neighborhoodData.slice(0, 10), 'Safe', 'bg-emerald-50 text-emerald-700', false); renderInsightList('nbh-caution-list', [...neighborhoodData].reverse().slice(0, 10), 'Caution', 'bg-rose-50 text-rose-700', false); }
+        function renderInsightList(id, data, label, badgeClass, isCity) {
+            const container = document.getElementById(id);
+            if (!container) return;
+            container.innerHTML = '';
+            data.forEach((d, i) => {
+                if (!d || !d.regions) return;
+                const totalPool = isCity ? cityData.length : TARGET_COUNT;
+                const iValue = label === 'Caution' ? (totalPool - i - 1) : i;
+                const g = getSafetyGrade(iValue, totalPool);
+                const p = Math.round(((totalPool - iValue) / totalPool) * 100);
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100 cursor-pointer ranking-card';
+                item.onclick = () => {
+                    try {
+                        if (d.regions && d.regions.latitude && d.regions.longitude) {
+                            map.setView([d.regions.latitude, d.regions.longitude], isCity ? 11 : 15);
+                            openDrawer(d, iValue, isCity);
+                        } else {
+                            debug(`Click Err: No coords for ${d.regions ? d.regions.name : 'Unknown'}`);
+                        }
+                    } catch (e) {
+                        debug(`Handler Err: ${e.message}`);
+                    }
+                };
+                item.innerHTML = `<div class="flex items-center gap-3"><div class="grade-badge-sm ${g.bg} ${g.color} border border-slate-100">${g.grade}</div><div class="flex flex-col"><div class="flex items-center gap-2"><span class="font-black text-slate-300 text-[10px]">#${iValue+1}</span><span class="uppercase font-bold text-slate-700 text-[10px] truncate max-w-[120px]">${d.regions.name}</span></div><span class="text-[8px] font-black text-indigo-400 uppercase tracking-tighter">${p}% Safest</span></div></div><span class="px-2 py-0.5 rounded-md text-[7px] font-black uppercase ${badgeClass}">${label}</span>`;
+                container.appendChild(item);
+            });
+        }
+        async function handleSearch(e) {
+            const query = e.target.value.trim();
+            const resultsContainer = document.getElementById('search-results-container');
+            if (!query || query.length < 2) { resultsContainer.style.display = 'none'; return; }
+            
+            const postcodeRegex = /^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$/i;
+            if (postcodeRegex.test(query)) {
+                resultsContainer.innerHTML = '<div class="p-4 text-center text-xs font-bold text-indigo-500 animate-pulse uppercase tracking-widest">Searching Postcode...</div>';
+                resultsContainer.style.display = 'block';
+                try {
+                    const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(query)}`);
+                    const data = await res.json();
+                    if (data.status === 200 && data.result) {
+                        map.setView([data.result.latitude, data.result.longitude], 15);
+                        if (window.searchMarker) map.removeLayer(window.searchMarker);
+                        window.searchMarker = L.marker([data.result.latitude, data.result.longitude]).addTo(map).bindPopup(`<div class="p-2 font-black uppercase text-xs">Postcode: ${data.result.postcode}</div>`).openPopup();
+                        resultsContainer.style.display = 'none'; return;
+                    }
+                } catch (err) { debug(`Search Err: ${err.message}`); }
+            }
+            
+            const lowerQuery = query.toLowerCase();
+            const results = neighborhoodData.filter(n => n.regions.name.toLowerCase().includes(lowerQuery) || n.cityName.toLowerCase().includes(lowerQuery)).slice(0, 20);
+            resultsContainer.innerHTML = '';
+            if (results.length > 0) {
+                resultsContainer.style.display = 'block';
+                results.forEach(r => {
+                    const div = document.createElement('div');
+                    div.className = 'p-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors';
+                    div.innerHTML = `<div class="text-[10px] font-black text-indigo-500 uppercase">${r.cityName}</div><div class="text-[11px] font-bold text-slate-800 uppercase">${r.regions.name}</div>`;
+                    div.onclick = () => { 
+                        map.setView([r.regions.latitude, r.regions.longitude], 15); 
+                        openDrawer(r, TARGET_COUNT - r.total_crimes, false); 
+                        resultsContainer.style.display = 'none'; 
+                    };
+                    resultsContainer.appendChild(div);
+                });
+            } else { resultsContainer.style.display = 'none'; }
+        }
+
+        document.addEventListener('click', (e) => {
+            const container = document.getElementById('search-results-container');
+            const search = document.getElementById('master-search');
+            if (container && !search.contains(e.target)) container.style.display = 'none';
+        });
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'bg-slate-800 text-white text-[10px] font-black uppercase px-6 py-3 rounded-2xl shadow-2xl mb-3 animate-bounce border border-slate-700 pointer-events-auto';
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        async function shareApp() {
+            const shareData = {
+                title: 'Scotland Safety Finder',
+                text: 'Check the real-time safety rating of any street in Scotland.',
+                url: window.location.href.includes('localhost') ? 'https://winengewe.github.io/scotland-crime-map/' : window.location.href
+            };
+
+            try {
+                if (navigator.share) {
+                    await navigator.share(shareData);
+                } else {
+                    await navigator.clipboard.writeText(shareData.url);
+                    showToast('Link Copied to Clipboard!');
+                }
+            } catch (err) {
+                console.log('Share failed:', err);
+            }
+        }
+
+        loadData();
+    </script>
+</body>
+</html>

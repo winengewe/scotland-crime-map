@@ -1,0 +1,1237 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scotland Safety Finder | Full Intelligence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Marker Cluster -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Heatmap Plugin -->
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        #map { height: 600px; width: 100%; border-radius: 1.5rem; border: 1px solid #e2e8f0; background: #f8fafc; }
+        .custom-popup .leaflet-popup-content-wrapper { border-radius: 1rem; padding: 0.5rem; border: none; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .ranking-card:hover { transform: translateY(-2px); transition: all 0.2s ease; box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.1); }
+        
+        #search-results-container {
+            position: absolute;
+            top: 70px;
+            right: 24px;
+            width: 320px;
+            max-height: 400px;
+            background: white;
+            z-index: 1001;
+            border-radius: 1.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            border: 1px solid #f1f5f9;
+            display: none;
+            overflow-y: auto;
+        }
+
+        .filter-chip {
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            background: #f1f5f9;
+            color: #64748b;
+            font-size: 0.625rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: 1px solid transparent;
+            z-index: 10;
+            position: relative;
+        }
+        .filter-chip:hover {
+            background: #e2e8f0;
+            color: #475569;
+        }
+        .filter-chip.active {
+            background: #4f46e5;
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
+        }
+        .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background-color: rgba(99, 102, 241, 0.6); }
+        .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background-color: rgba(99, 102, 241, 1); color: white; font-weight: 900; }
+        
+        .grade-badge {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            font-size: 1.5rem;
+            font-weight: 900;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 2px solid white;
+        }
+        /* Intelligence Drawer */
+        #intel-drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 400px;
+            height: 100%;
+            background: white;
+            z-index: 2000;
+            box-shadow: -10px 0 50px rgba(0,0,0,0.1);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border-left: 1px solid #f1f5f9;
+            display: flex;
+            flex-direction: column;
+        }
+        #intel-drawer.translate-x-full {
+            transform: translateX(100%);
+        }
+        .grade-badge-sm {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 900;
+        }
+        .leaflet-routing-container { display: none; }
+    </style>
+</head>
+<body class="bg-[#f8fafc] text-slate-900 leading-normal">
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-100 sticky top-0 z-[1000] px-6 py-4 shadow-sm">
+        <div class="container mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-100">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-tight text-slate-800 uppercase italic leading-none">Scotland Safety Finder</h1>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span id="connection-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        <p id="timeframe-label" class="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Loading Analytics...</p>
+                        <!-- Global Pulse Indicator -->
+                        <div id="global-pulse-chip" class="hidden flex items-center gap-1.5 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 ml-2">
+                             <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>
+                             <span id="global-pulse-count" class="text-[8px] font-black text-blue-600 uppercase">0 Live Alerts</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-6">
+                <!-- Timeframe Selector -->
+                <div class="flex flex-col items-end">
+                    <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Select Analysis Period</span>
+                    <div class="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 mr-2">
+                        <input type="checkbox" id="show-boundaries-toggle" onchange="renderMap()" class="w-3 h-3 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer">
+                        <label for="show-boundaries-toggle" class="text-[9px] font-black text-slate-500 uppercase tracking-widest cursor-pointer">Show Boundaries</label>
+                    </div><select id="year-selector" onchange="loadData()" class="bg-slate-50 border border-slate-200 text-[10px] font-black uppercase py-1.5 px-3 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer">
+                        <option value="Overall" selected>Overall (5-Year Average)</option>
+                        <option value="2024/2025">2024/2025 (Latest)</option>
+                        <option value="2023/2024">2023/2024</option>
+                        <option value="2022/2023">2022/2023</option>
+                        <option value="2021/2022">2021/2022</option>
+                        <option value="2020/2021">2020/2021</option>
+                    </select>
+                </div>
+                <div class="hidden lg:block w-32 h-1 bg-slate-100 rounded-full overflow-hidden">
+                    <div id="sync-bar" class="h-full bg-indigo-500 transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <div class="relative">
+                    <input type="text" id="master-search" onkeyup="handleSearch(event)" placeholder="Search street or city..." class="bg-slate-50 border border-slate-200 text-xs font-bold py-2.5 px-5 rounded-xl outline-none focus:ring-4 focus:ring-indigo-50 w-64 transition-all">
+                    <div id="search-results-container" class="custom-scrollbar"></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto py-10 px-6 space-y-12">
+        <!-- Map Section -->
+        <section class="bg-white p-4 rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden relative">
+            <div class="px-8 py-6 border-b border-slate-50 mb-4">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div>
+                        <h2 class="text-xs font-black uppercase text-slate-400 tracking-[0.3em]">National Safety Radar</h2>
+                        <p class="text-[10px] font-bold text-slate-500 uppercase mt-1">Precise neighborhood monitoring (6,976 zones)</p> <p id="category-note" class="text-[9px] font-bold text-indigo-400 uppercase mt-2 hidden">City-level breakdown shown. Neighborhood zones use Overall Safety Rank.</p>
+                    </div>
+                    <div class="flex gap-4 text-[9px] font-black uppercase">
+                        <span class="flex items-center gap-1.5 text-emerald-600"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm"></span> Safe</span>
+                        <span class="flex items-center gap-1.5 text-rose-600"><span class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm"></span> Caution</span>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 mt-6">
+                    <button class="filter-chip active" onclick="toggleCategory('Total Crimes')">Total Crimes</button>
+                    <button class="filter-chip" onclick="toggleCategory('Violence')">Violence</button>
+                    <button class="filter-chip" onclick="toggleCategory('Dishonesty')">Dishonesty</button>
+                    <button class="filter-chip" onclick="toggleCategory('Damage')">Damage</button>
+                    <button class="filter-chip" onclick="toggleCategory('Antisocial')">Antisocial</button>
+                    <button class="filter-chip" onclick="toggleCategory('Society')">Society</button>
+                    <button class="filter-chip" onclick="toggleCategory('Sexual Crimes')">Sexual Crimes</button>
+                    
+                    <div class="flex items-center gap-1 ml-auto bg-slate-50 p-1 rounded-full border border-slate-100">
+                        <button onclick="toggleViewMode('markers')" data-mode="markers" class="view-mode-btn bg-indigo-600 text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-full transition-all">Markers</button>
+                        <button onclick="toggleViewMode('heatmap')" data-mode="heatmap" class="view-mode-btn bg-white text-slate-500 text-[8px] font-black uppercase px-3 py-1.5 rounded-full transition-all">Heatmap</button>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-full border border-slate-100">
+                        <input type="checkbox" id="show-incidents-toggle" onchange="renderMap()" class="w-3 h-3 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer">
+                        <label for="show-incidents-toggle" class="text-[9px] font-black text-slate-500 uppercase tracking-widest cursor-pointer">Show Live Reports</label>
+                    </div>
+                </div>
+            </div>
+            <div id="map"></div>
+        </section>
+
+        <!-- Insights -->
+        <section class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            <div class="xl:col-span-2 flex flex-col gap-12">
+                <!-- City Overview -->
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-black text-slate-800 tracking-tighter uppercase">City Overview <span id="city-count" class="text-sm font-bold text-slate-400 ml-2"></span></h2>  
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-emerald-500 shadow-sm">
+                            <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Safest Cities</h3>
+                            <div id="city-safe-list" class="space-y-2"></div>
+                        </div>
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-rose-500 shadow-sm">
+                            <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Caution Cities</h3>
+                            <div id="city-caution-list" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Micro-Spots -->
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-black text-slate-800 tracking-tighter uppercase">Micro-Spots <span id="nbh-count" class="text-sm font-bold text-slate-400 ml-2"></span></h2>     
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-emerald-500 shadow-sm">
+                            <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Safest Spots</h3>
+                            <div id="nbh-safe-list" class="space-y-2"></div>
+                        </div>
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-rose-500 shadow-sm">
+                            <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Caution Spots</h3>
+                            <div id="nbh-caution-list" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Intelligence -->
+            <div class="space-y-6">
+                <h2 class="text-2xl font-black text-slate-800 tracking-tighter uppercase italic">Intelligence</h2>
+                <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-indigo-500 shadow-sm h-[740px] flex flex-col">
+                    <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Live Feed</h3>
+                    <div id="intelligence-feed" class="space-y-4 overflow-y-auto custom-scrollbar flex-1 pr-2">
+                        <div class="p-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Awaiting Map Sync...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="container mx-auto py-10 text-center">
+        <p class="text-[10px] font-black uppercase text-slate-300 tracking-[0.3em]">Official Gov Data Aggregated | Scotland Safety Finder</p> <p id="category-note" class="text-[9px] font-bold text-indigo-400 uppercase mt-2 hidden">City-level breakdown shown. Neighborhood zones use Overall Safety Rank.</p>
+    </footer>
+
+    <script>
+        const SUPABASE_URL = 'https://hunulwmlmeurkgpdkbhp.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1bnVsd21sbWV1cmtncGRrYmhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5Mzg4MDksImV4cCI6MjA5NDUxNDgwOX0.pNFwpAeocVRCE39EBZXJ7-HF-TXYBMt3ogEeANDsGsM';
+        const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const map = L.map('map', { zoomControl: true, scrollWheelZoom: true, attributionControl: false, preferCanvas: true }).setView([56.8, -4.2], 6);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
+        const markers = L.markerClusterGroup({ showCoverageOnHover: false });
+        map.addLayer(markers);
+        const mapCircles = new Map();
+        const boundaryLayer = L.layerGroup().addTo(map);
+
+        const routingControl = L.Routing.control({
+            waypoints: [],
+            routeWhileDragging: false,
+            addWaypoints: false,
+            show: false,
+            showAlternatives: true,
+            altLineOptions: {
+                styles: [
+                    {color: 'black', opacity: 0.15, weight: 9},
+                    {color: 'white', opacity: 0.8, weight: 6},
+                    {color: 'blue', opacity: 0.5, weight: 2}
+                ]
+            },
+            lineOptions: {
+                styles: [{color: '#4f46e5', opacity: 0.8, weight: 6}]
+            },
+            createMarker: function() { return null; }
+        }).addTo(map);
+
+        async function scoreJourney() {
+            const start = document.getElementById('route-start').value;
+            const end = document.getElementById('route-end').value;
+
+            if (!start || !end) {
+                alert("Please enter both start and end postcodes.");
+                return;
+            }
+
+            async function getCoords(pc) {
+                const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(pc)}`);
+                const data = await res.json();
+                if (data.status === 200) return [data.result.latitude, data.result.longitude];
+                return null;
+            }
+
+            const startCoords = await getCoords(start);
+            const endCoords = await getCoords(end);
+
+            if (!startCoords || !endCoords) {
+                alert("One or both postcodes are invalid.");
+                return;
+            }
+
+            routingControl.setWaypoints([
+                L.latLng(startCoords[0], startCoords[1]),
+                L.latLng(endCoords[0], endCoords[1])
+            ]);
+
+            routingControl.off('routesfound');
+            routingControl.on('routesfound', function(e) {
+                const routes = e.routes;
+                let safestRouteIdx = 0;
+                let maxSafetyScore = -1;
+                let routeScores = [];
+
+                routes.forEach((route, idx) => {
+                    const coordinates = route.coordinates;
+                    let totalPercentile = 0;
+                    let count = 0;
+                    let highActivityCount = 0;
+                    let lastSampleDist = 0;
+                    let cumulativeDist = 0;
+
+                    for (let i = 0; i < coordinates.length; i++) {
+                        if (i > 0) cumulativeDist += coordinates[i].distanceTo(coordinates[i-1]);
+                        
+                        if (i === 0 || cumulativeDist - lastSampleDist >= 500) {
+                            const point = coordinates[i];
+                            let nearest = null;
+                            let minDist = Infinity;
+                            
+                            neighborhoodData.forEach(n => {
+                                const dist = point.distanceTo(L.latLng(n.regions.latitude, n.regions.longitude));
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    nearest = n;
+                                }
+                            });
+
+                            if (nearest) {
+                                const rank = TARGET_COUNT - nearest.total_crimes;
+                                const percentile = Math.round((rank / TARGET_COUNT) * 100);
+                                totalPercentile += percentile;
+                                count++;
+                                
+                                const gradeData = getSafetyGrade(TARGET_COUNT - nearest.total_crimes, TARGET_COUNT);
+                                if (gradeData.grade === 'F') {
+                                    highActivityCount++;
+                                }
+                            }
+                            lastSampleDist = cumulativeDist;
+                        }
+                    }
+
+                    const avgPercentile = count > 0 ? Math.round(totalPercentile / count) : 0;
+                    routeScores.push({ avgPercentile, highActivityCount });
+
+                    if (avgPercentile > maxSafetyScore) {
+                        maxSafetyScore = avgPercentile;
+                        safestRouteIdx = idx;
+                    }
+                });
+
+                // Display summary for safest route
+                const safest = routeScores[safestRouteIdx];
+                const scoreBadge = document.getElementById('route-score');
+                const container = document.getElementById('route-score-container');
+                const summary = document.getElementById('route-summary');
+                const warning = document.getElementById('route-warning');
+
+                container.classList.remove('hidden');
+                scoreBadge.innerText = `${safest.avgPercentile}%`;
+                
+                if (safest.avgPercentile >= 80) {
+                    scoreBadge.className = "px-3 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-200";
+                } else if (safest.avgPercentile >= 50) {
+                    scoreBadge.className = "px-3 py-1 rounded-full text-[10px] font-black uppercase bg-amber-50 text-amber-600 border border-amber-200";
+                } else {
+                    scoreBadge.className = "px-3 py-1 rounded-full text-[10px] font-black uppercase bg-rose-50 text-rose-600 border border-rose-200";
+                }
+
+                summary.innerText = `Safest Path Selected (${routes.length} analyzed). Journey Safety: ${safest.avgPercentile}%`;
+                
+                if (safest.highActivityCount > 0) {
+                    warning.classList.remove('hidden');
+                    warning.querySelector('p').innerText = `Caution: Path passes through ${safest.highActivityCount} high-activity areas.`;
+                } else {
+                    warning.classList.add('hidden');
+                }
+            });
+        }
+
+
+        function generateAISummary(data, rankIndex, incidents, isCity) {
+            const totalPool = isCity ? cityData.length : TARGET_COUNT;
+            const gradeData = getSafetyGrade(rankIndex, totalPool);
+            const areaName = data.regions.name;
+            let summary = "";
+
+            if (gradeData.grade === 'A+') {
+                summary = `Top 5% Safest: ${areaName} is statistically a top-tier safe haven, maintaining an elite security profile relative to the national average.`;
+            } else if (gradeData.grade === 'A' || gradeData.grade === 'B') {
+                summary = `${areaName} maintains a strong safety profile. While minor incidents occur occasionally, the overall environment is significantly more secure than the national average.`;
+            } else if (gradeData.grade === 'C' || gradeData.grade === 'D') {
+                summary = `${areaName} exhibits moderate activity. We recommend standard situational awareness, especially during late hours, as incident density aligns with urban averages.`;
+            } else if (gradeData.grade === 'F') {
+                summary = `Caution recommended. ${areaName} is currently flagged for higher incident density. Data suggests prioritizing well-lit main routes and remaining vigilant of surroundings.`;
+            }
+
+            const spatialCount = incidents.filter(inc => inc.isSpatial).length;
+            if (spatialCount > 0) {
+                summary += ` System detected [${spatialCount}] recent police interventions within 800m of this location.`;
+            } else if (incidents.length > 0) {
+                summary += " Note: Recent police activity has been detected in this sector; check the live feed below for details.";
+            }
+
+            return summary;
+        }
+
+        function closeDrawer() {
+            document.getElementById('intel-drawer').classList.add('translate-x-full');
+        }
+
+
+        
+
+        
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // metres
+            const phi1 = lat1 * Math.PI / 180;
+            const phi2 = lat2 * Math.PI / 180;
+            const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+            const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                      Math.cos(phi1) * Math.cos(phi2) *
+                      Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        async function openDrawer(data, rankIndex, isCity) {
+            const drawer = document.getElementById('intel-drawer');
+            const totalPool = isCity ? cityData.length : TARGET_COUNT;
+            const gradeData = getSafetyGrade(rankIndex, totalPool);
+            const percentile = Math.round(((totalPool - rankIndex) / totalPool) * 100);
+
+            // Populate header
+            document.getElementById('drawer-grade').innerText = gradeData.grade;
+            document.getElementById('drawer-grade-box').className = `grade-badge ${gradeData.bg} ${gradeData.color} ${gradeData.border}`;
+            document.getElementById('drawer-name').innerText = data.regions.name;
+
+            // Trend Calculation
+            const trendContainer = document.getElementById('drawer-trend-container');
+            const yearSelector = document.getElementById('year-selector');
+            const currentYear = yearSelector ? yearSelector.value : 'Overall';
+
+            if (trendContainer) {
+                if (currentYear === 'Overall') {
+                    trendContainer.innerHTML = '<span class="text-[9px] font-bold text-slate-400 uppercase italic">Baseline Analysis Active (5-Year Avg)</span>';
+                } else {
+                    try {
+                        const { data: overallStats } = await client
+                            .from('crime_stats')
+                            .select('total_crimes')
+                            .eq('region_id', data.regions.id)
+                            .eq('period', 'Overall')
+                            .eq('crime_type', currentCategory)
+                            .maybeSingle();
+
+                        if (overallStats && overallStats.total_crimes > 0) {
+                            const baseline = overallStats.total_crimes;
+                            const currentVal = data.total_crimes;
+                            const diff = ((currentVal - baseline) / baseline) * 100;
+                            const isImproving = diff < 0;
+
+                            trendContainer.innerHTML = `
+                                <div class="flex items-center gap-2 ${isImproving ? 'text-emerald-600' : 'text-rose-600'} font-black text-[10px] uppercase">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="${isImproving ? 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6' : 'M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6'}"></path>
+                                    </svg>
+                                    ${Math.abs(Math.round(diff))}% ${isImproving ? 'Lower Risk' : 'Higher Activity'} vs Baseline
+                                </div>
+                            `;
+                        } else {
+                            trendContainer.innerHTML = '<span class="text-[9px] font-bold text-slate-400 uppercase italic">Trend Neutral (No Change)</span>';
+                        }
+                    } catch (e) {
+                        console.error("Trend error:", e);
+                        trendContainer.innerHTML = '<span class="text-[9px] font-bold text-slate-400 uppercase italic">Trend Analysis Unavailable</span>';
+                    }
+                }
+            }
+
+            // Populate stats
+            document.getElementById('drawer-percentile').innerText = `Top ${percentile}% Safest`;
+            document.getElementById('drawer-percentile').className = `text-lg font-black ${gradeData.color}`;
+            // Logic Fix: Misleading incident counts for 'Total Crimes'
+            const totalIncidentsEl = document.getElementById('drawer-total-incidents');
+            if (!isCity) {
+                totalIncidentsEl.innerText = "N/A";
+                totalIncidentsEl.title = "Zone-level totals aggregated by National Rank.";
+                totalIncidentsEl.style.cursor = "help";
+            } else {
+                totalIncidentsEl.innerText = data.total_crimes.toLocaleString();
+                totalIncidentsEl.removeAttribute('title');
+                totalIncidentsEl.style.cursor = "default";
+            }
+
+            // Crime Breakdown Logic
+            const breakdownContainer = document.getElementById('breakdown-container');
+            const breakdownLoading = document.getElementById('breakdown-loading');
+            const yearSelector = document.getElementById('year-selector');
+            const yearValue = yearSelector ? yearSelector.value : '2020';
+            
+            if (breakdownContainer) {
+                breakdownContainer.innerHTML = '';
+                if (isCity) {
+                    if (breakdownLoading) breakdownLoading.classList.remove('hidden');
+                    try {
+                        const { data: stats, error } = await client
+                            .from('crime_stats')
+                            .select('crime_type, total_crimes')
+                            .eq('region_id', data.regions.id)
+                            .eq('period', yearValue)
+                            .neq('crime_type', 'Total Crimes')
+                            .neq('crime_type', 'Neighborhood Rank');
+
+                        if (error) throw error;
+
+                        if (stats && stats.length > 0) {
+                            const total = data.total_crimes > 0 ? data.total_crimes : stats.reduce((acc, curr) => acc + curr.total_crimes, 0);
+                            stats.sort((a, b) => b.total_crimes - a.total_crimes);
+                            
+                            stats.forEach(item => {
+                                const percentage = total > 0 ? Math.round((item.total_crimes / total) * 100) : 0;
+                                if (percentage === 0 && item.total_crimes === 0) return;
+
+                                const row = document.createElement('div');
+                                row.className = "space-y-1";
+                                row.innerHTML = `
+                                    <div class="flex justify-between items-center text-[9px] font-black uppercase tracking-wider">
+                                        <span class="text-slate-600">${item.crime_type}</span>
+                                        <span class="text-slate-400">${percentage}%</span>
+                                    </div>
+                                    <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                        <div class="h-full bg-indigo-500 rounded-full transition-all duration-1000" style="width: 0%"></div>
+                                    </div>
+                                `;
+                                breakdownContainer.appendChild(row);
+                                setTimeout(() => {
+                                    const bar = row.querySelector('.bg-indigo-500');
+                                    if (bar) bar.style.width = `${percentage}%`;
+                                }, 100);
+                            });
+                        } else {
+                            breakdownContainer.innerHTML = '<p class="text-[10px] font-medium text-slate-500 italic text-center py-2">No categorical data available.</p>';
+                        }
+                    } catch (err) {
+                        console.error("Breakdown error:", err);
+                        breakdownContainer.innerHTML = '<p class="text-[10px] font-medium text-red-400 italic text-center py-2">Failed to load breakdown.</p>';
+                    } finally {
+                        if (breakdownLoading) breakdownLoading.classList.add('hidden');
+                    }
+                } else {
+                    breakdownContainer.innerHTML = '<p class="text-[10px] font-medium text-slate-400 italic">Detailed categorical breakdown is available at the City level.</p>';
+                }
+            }
+
+            // Filter news
+            const feed = document.getElementById('drawer-feed');
+                        feed.innerHTML = '';
+            // Filter news - Spatial Incident Matching
+            const lat = data.regions.latitude;
+            const lon = data.regions.longitude;
+            const fullName = data.regions.name;
+            const baseName = fullName.split(' - ')[0].trim().toLowerCase();
+            const parentCity = (data.cityName || "").toLowerCase();
+            // Hierarchical City Intelligence Mapping
+            const COUNCIL_TOWNS = {
+                "south lanarkshire": ["hamilton", "east kilbride", "rutherglen", "blantyre", "cambuslang", "larkhall", "carluke", "lanark"],
+                "north lanarkshire": ["motherwell", "cumbernauld", "airdrie", "coatbridge", "wishaw", "bellshill", "kilsyth"],
+                "fife": ["dunfermline", "kirkcaldy", "glenrothes", "st andrews", "cupar", "cowdenbeath"],
+                "aberdeenshire": ["peterhead", "fraserburgh", "inverurie", "westhill", "stonehaven"],
+                "renfrewshire": ["paisley", "renfrew", "johnstone", "erskine"],
+                "west lothian": ["livingston", "bathgate", "broxburn", "whitburn", "armadale"]
+            };
+
+
+            const relatedNews = incidentsData.map(inc => {
+                let isSpatial = false;
+                if (inc.latitude && inc.longitude && lat && lon) {
+                    const dist = getDistance(lat, lon, inc.latitude, inc.longitude);
+                    if (dist <= 1000) isSpatial = true;
+                }
+                return { ...inc, isSpatial };
+            }).filter(inc => {
+                if (isCity) {
+                    const title = (inc.title || "").toLowerCase().trim();
+                    const incidentCity = (inc.city || "").toLowerCase().trim();
+                    if (!baseName || baseName.trim() === "") return false;
+
+                    // Smarter city matching: check if either is contained in the other
+                    const cityMatch = (incidentCity.length > 0 && baseName.includes(incidentCity)) || 
+                                     (baseName.length > 0 && incidentCity.includes(baseName));
+                    
+                    // Check if parentCity is contained in the incident's city field
+                    const parentMatch = parentCity && incidentCity && incidentCity.includes(parentCity);
+
+                    
+                    // Hierarchical Matching
+                    let hierarchicalMatch = false;
+                    if (COUNCIL_TOWNS[baseName]) {
+                        hierarchicalMatch = COUNCIL_TOWNS[baseName].some(town => 
+                            incidentCity.includes(town) || title.includes(town)
+                        );
+                    }
+
+                    return cityMatch || parentMatch || title.includes(baseName) || hierarchicalMatch;
+                } else {
+                    return inc.isSpatial;
+                }
+            });
+            
+            const spatialCount = relatedNews.filter(inc => inc.isSpatial).length;
+            const liveActivityEl = document.getElementById('drawer-live-activity');
+            if (liveActivityEl) liveActivityEl.innerText = spatialCount;
+
+            // Update AI Summary
+            document.getElementById('drawer-ai-summary').innerText = generateAISummary(data, rankIndex, relatedNews, isCity);
+
+            if (relatedNews.length === 0) {
+                const year = document.getElementById('year-selector').value;
+                const msg = year !== 'Overall' ? 'No archived news found for this period' : 'No local reports found for this area';
+                feed.innerHTML = `<div class="p-8 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">${msg}</div>`;
+            } else {
+                relatedNews.forEach(inc => {
+                    const status = getIncidentStatus(inc.title);
+                    const item = document.createElement('div');
+                    item.className = 'p-4 bg-slate-50/50 rounded-2xl border border-slate-100 mb-3 hover:border-indigo-200 transition-all cursor-pointer group';
+                    item.onclick = () => window.open(inc.url, '_blank');
+                    item.innerHTML = `
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[8px] font-black ${status.color} px-2 py-0.5 rounded-full uppercase">${status.label}</span>
+                            <span class="text-[9px] font-bold text-slate-400">${new Date(inc.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <h4 class="text-xs font-bold text-slate-800 leading-tight mb-2 uppercase group-hover:text-indigo-600 transition-colors">${inc.title}</h4>
+                        <span class="text-[9px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Read More &rarr;</span>
+                    `;
+                    feed.appendChild(item);
+                });
+            }
+
+            drawer.classList.remove('translate-x-full');
+        }
+
+
+        let cityData = [], neighborhoodData = [], filteredNbh = [], incidentsData = [];
+        let viewMode = 'markers';
+        let heatLayer = null;
+
+        function getSafetyGrade(rankIndex, total) {
+            const p = ((total - rankIndex) / total) * 100;
+            if (p >= 95) return { grade: 'A+', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+            if (p >= 80) return { grade: 'A', color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+            if (p >= 60) return { grade: 'B', color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' };
+            if (p >= 40) return { grade: 'C', color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-200' };
+            if (p >= 20) return { grade: 'D', color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' };
+            return { grade: 'F', color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' };
+        }
+
+        function toggleViewMode(mode) {
+            viewMode = mode;
+            document.querySelectorAll('.view-mode-btn').forEach(btn => {
+                if (btn.getAttribute('data-mode') === mode) {
+                    btn.classList.add('bg-indigo-600', 'text-white');
+                    btn.classList.remove('bg-white', 'text-slate-500');
+                } else {
+                    btn.classList.remove('bg-indigo-600', 'text-white');
+                    btn.classList.add('bg-white', 'text-slate-500');
+                }
+            });
+            renderMap();
+        }
+        const incidentMarkers = L.layerGroup().addTo(map);
+        const TARGET_COUNT = 6976;
+        let currentCategory = 'Total Crimes';
+
+        async function loadData() {
+            const syncBar = document.getElementById('sync-bar');
+            const timeframeLabel = document.getElementById('timeframe-label');
+            const year = document.getElementById('year-selector').value;
+
+            try {
+                timeframeLabel.innerText = `Analyzing: ${year} (${currentCategory})`;
+                syncBar.style.width = "0%";
+
+                // Toggle category note visibility
+                document.querySelectorAll('[id="category-note"]').forEach(note => {
+                    if (currentCategory !== 'Total Crimes') {
+                        note.classList.remove('hidden');
+                    } else {
+                        note.classList.add('hidden');
+                    }
+                });
+
+                const { data: cities } = await client.from('crime_stats')
+                    .select('total_crimes, crime_rate, regions(name, id, latitude, longitude)')
+                    .eq('crime_type', currentCategory)
+                    .eq('period', year);
+
+                // Fetch latest incidents
+                let incidentsQuery = client.from('incidents').select('*').order('created_at', { ascending: false });
+                
+                if (year !== 'Overall') {
+                    const startYear = year.split('/')[0];
+                    const endYear = year.split('/')[1] || startYear;
+                    const startDate = `${startYear}-01-01`;
+                    const endDate = `${endYear}-12-31`;
+                    incidentsQuery = incidentsQuery.gte('created_at', startDate).lte('created_at', endDate);
+                } else {
+                    incidentsQuery = incidentsQuery.limit(1000);
+                }
+                
+                const { data: incidents } = await incidentsQuery;
+                incidentsData = incidents || [];
+
+                // Update Global Pulse
+                const globalPulseChip = document.getElementById('global-pulse-chip');
+                const globalPulseCount = document.getElementById('global-pulse-count');
+                if (globalPulseChip && globalPulseCount) {
+                    const recentCount = incidentsData.length;
+                    if (recentCount > 0) {
+                        globalPulseChip.classList.remove('hidden');
+                        globalPulseCount.innerText = `${recentCount} Live Reports`;
+                    } else {
+                        globalPulseChip.classList.add('hidden');
+                    }
+                }
+
+                cityData = (cities || [])
+                    .filter(c => c.regions && c.regions.name !== 'Scotland')
+                    .sort((a,b) => (a.crime_rate || 999) - (b.crime_rate || 999));
+
+                neighborhoodData = [];
+                let page = 0; const pageSize = 1000;
+                while (true) {
+                    const neighborhoodQueryType = 'Neighborhood Rank';
+                    const { data, error } = await client.from('crime_stats')
+                        .select('total_crimes, regions(name, id, latitude, longitude, parent_id)')
+                        .eq('crime_type', neighborhoodQueryType)
+                        .eq('period', '2020')
+                        .order('total_crimes', { ascending: false })
+                        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                    if (error || !data || data.length === 0) break;
+
+                    const batch = data.map(n => {
+                        if (!n.regions) return null;
+                        const parent = cityData.find(c => c.regions.id === n.regions.parent_id);
+                        return {
+                            ...n,
+                            cityName: parent ? parent.regions.name : 'Scotland Area'
+                        };
+                    }).filter(n => n !== null);
+
+                    neighborhoodData = [...neighborhoodData, ...batch];
+                    const progress = Math.min(Math.round((neighborhoodData.length / TARGET_COUNT) * 100), 100);
+                    syncBar.style.width = `${progress}%`;
+
+                    if (page === 0) { renderUI(); }
+                    if (data.length < pageSize) break;
+                    page++;
+                    await new Promise(r => setTimeout(r, 50));
+                }
+
+                renderUI();
+                document.getElementById('connection-dot').className = "w-2 h-2 rounded-full bg-green-500 border-2 border-white shadow-sm";
+                timeframeLabel.innerText = `Data Live: ${year} (${currentCategory})`;
+                document.getElementById('city-count').innerText = `(${cityData.length} Cities)`;
+                document.getElementById('nbh-count').innerText = `(${neighborhoodData.length} Zones)`;
+
+            } catch (err) { console.error(err); }
+        }
+
+                function getIncidentStatus(title) {
+            const t = title.toLowerCase();
+            if (t.includes('arrested') || t.includes('charged') || t.includes('jailed')) {
+                return { label: 'ARREST MADE', color: 'bg-emerald-100 text-emerald-700' };
+            }
+            if (t.includes('appeal') || t.includes('witnesses')) {
+                return { label: 'POLICE APPEAL', color: 'bg-indigo-100 text-indigo-700' };
+            }
+            if (t.includes('dealing with') || t.includes('closed') || t.includes('disperse')) {
+                return { label: 'ACTIVE INCIDENT', color: 'bg-amber-100 text-amber-700' };
+            }
+            return { label: 'REPORT FILED', color: 'bg-slate-100 text-slate-700' };
+        }
+
+        function toggleCategory(cat) {
+            currentCategory = cat;
+            document.querySelectorAll('.filter-chip').forEach(chip => {
+                if (chip.innerText === cat.toUpperCase()) {
+                    chip.classList.add('active');
+                } else {
+                    chip.classList.remove('active');
+                }
+            });
+            loadData();
+        }
+
+        function updateIntelligenceFeed() {
+            const container = document.getElementById('intelligence-feed');
+            if (!container) return;
+
+            const bounds = map.getBounds();
+            const visibleIncidents = incidentsData.filter(inc => {
+                if (!inc.latitude || !inc.longitude) return false;
+                return bounds.contains([inc.latitude, inc.longitude]);
+            }).slice(0, 15);
+
+            const displayData = visibleIncidents;
+
+            if (displayData.length === 0) {
+                const year = document.getElementById('year-selector').value;
+                const msg = year !== 'Overall' ? 'No archived news found for this period' : 'No local reports found for this view';
+                container.innerHTML = `<div class="p-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">${msg}</div>`;
+                return;
+            }
+
+            container.innerHTML = '';
+            displayData.forEach(inc => {
+                const status = getIncidentStatus(inc.title);
+                const item = document.createElement('div');
+                item.className = 'p-4 bg-slate-50/50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all cursor-pointer group';
+                item.onclick = () => {
+                    map.flyTo([inc.latitude, inc.longitude], 15);
+                };
+                
+                item.innerHTML = `
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[8px] font-black ${status.color} px-2 py-0.5 rounded-full uppercase tracking-wider">${status.label}</span>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase">${new Date(inc.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <h4 class="text-xs font-bold text-slate-800 leading-tight mb-2 uppercase group-hover:text-indigo-600 transition-colors">${inc.title}</h4>
+                    <a href="${inc.url}" target="_blank" onclick="event.stopPropagation()" class="text-[9px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Source Report \u2192</a>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        map.on('moveend', updateIntelligenceFeed);
+
+        function renderUI() {
+            renderMap();
+            renderTop10s();
+            updateIntelligenceFeed();
+        }
+
+                function renderMap() {
+            markers.clearLayers();
+            if (heatLayer) map.removeLayer(heatLayer);
+            mapCircles.clear();
+
+            if (viewMode === 'heatmap') {
+                const heatPoints = neighborhoodData
+                    .filter(n => n.regions.latitude)
+                    .map(n => [n.regions.latitude, n.regions.longitude, n.total_crimes / 1000]);
+                heatLayer = L.heatLayer(heatPoints, { radius: 25, blur: 15, maxZoom: 17 }).addTo(map);
+            } else {
+                neighborhoodData.forEach((n, i) => {
+                    if (n.regions.latitude) {
+                        const rankVal = n.total_crimes;
+                        const color = rankVal > 5000 ? '#10b981' : (rankVal > 2000 ? '#f59e0b' : '#ef4444');
+
+                        const marker = L.circleMarker([n.regions.latitude, n.regions.longitude], {
+                            radius: 8,
+                            fillColor: color,
+                            color: "#fff",
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        });
+
+                        markers.addLayer(marker);
+                        mapCircles.set(n.regions.id, marker);
+
+                        const rank = TARGET_COUNT - rankVal + 1;
+                        marker.on('click', () => openDrawer(n, rank - 1, false));
+                        const gradeData = getSafetyGrade(rank - 1, TARGET_COUNT);
+                        const popupContent = `
+                            <div class="p-4 min-w-[240px]">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <div class="text-[9px] font-black text-indigo-500 uppercase mb-1 tracking-wider">${n.cityName}</div>
+                                        <h4 class="text-sm font-black text-slate-800 leading-tight uppercase">Reported on or near ${n.regions.name}</h4>
+                                    </div>
+                                    <div class="grade-badge ${gradeData.bg} ${gradeData.color} ${gradeData.border} border-2">
+                                        ${gradeData.grade}
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-2 border-t border-slate-100 pt-3">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase">National Rank</span>
+                                        <span class="text-xs font-black text-slate-800">#${rank.toLocaleString()} / ${TARGET_COUNT.toLocaleString()}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase">Safety Rating</span>
+                                        <span class="text-[10px] font-black ${gradeData.color} uppercase">Top ${Math.round(((TARGET_COUNT - rank) / TARGET_COUNT) * 100)}% Safest</span>
+                                    </div>
+                                    <button onclick="openDrawer(neighborhoodData[${i}], ${rank-1}, false)" class="w-full mt-4 bg-indigo-600 text-white text-[9px] font-black py-2 rounded-lg uppercase tracking-widest">Open Intelligence</button>
+                                </div>
+                            </div>
+                        `;
+                        marker.bindPopup(popupContent, { className: 'custom-popup' });
+                    }
+                });
+            }
+
+            incidentMarkers.clearLayers();
+            if (document.getElementById('show-incidents-toggle')?.checked) {
+                incidentsData.forEach(inc => {
+                    if (inc.latitude && inc.longitude) {
+                        const status = getIncidentStatus(inc.title);
+                        const marker = L.marker([inc.latitude, inc.longitude], {
+                            icon: L.divIcon({
+                                className: 'custom-incident-marker',
+                                html: `<div class="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>`,
+                                iconSize: [16, 16],
+                                iconAnchor: [8, 8]
+                            })
+                        });
+
+                        const popupContent = `
+                            <div class="p-2 min-w-[220px]">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-[8px] font-black ${status.color} px-2 py-0.5 rounded-full uppercase tracking-wider">${status.label}</span>
+                                    <span class="text-[9px] font-bold text-slate-400 uppercase">${new Date(inc.created_at).toLocaleDateString()}</span>
+                                </div>
+                                <h4 class="text-sm font-black text-slate-800 leading-tight mb-2 uppercase">${inc.title}</h4>
+                                <a href="${inc.url}" target="_blank" class="block text-center bg-slate-50 hover:bg-slate-100 text-indigo-600 text-[10px] font-black py-2 rounded-lg transition-all uppercase tracking-widest border border-slate-100">View News Source</a>
+                            </div>
+                        `;
+                        marker.bindPopup(popupContent, { className: 'custom-popup' });
+                        incidentMarkers.addLayer(marker);
+                    }
+                });
+            }
+        }
+
+
+        async function fetchBoundaries() {
+            const bounds = map.getBounds();
+            // Fetch top 500 regions with boundaries
+            const { data, error } = await client.from('regions')
+                .select('id, name, boundary')
+                .not('boundary', 'is', null)
+                .limit(500);
+
+            if (error) {
+                console.error('Error fetching boundaries:', error);
+                return;
+            }
+            renderBoundaries(data);
+        }
+
+        function renderBoundaries(regionsWithBoundaries) {
+            boundaryLayer.clearLayers();
+            regionsWithBoundaries.forEach(reg => {
+                const nData = neighborhoodData.find(n => n.regions.id === reg.id);
+                if (!nData) return;
+
+                const rankVal = nData.total_crimes;
+                const rank = TARGET_COUNT - rankVal + 1;
+                const color = rankVal > 5000 ? '#10b981' : (rankVal > 2000 ? '#f59e0b' : '#ef4444');
+                
+                const geojson = L.geoJSON(reg.boundary, {
+                    style: {
+                        fillColor: color,
+                        weight: 1,
+                        opacity: 1,
+                        color: 'white',
+                        fillOpacity: 0.2
+                    }
+                });
+                
+                geojson.on('click', (e) => {
+                    L.DomEvent.stopPropagation(e);
+                    openDrawer(nData, rank - 1, false);
+                });
+                
+                boundaryLayer.addLayer(geojson);
+            });
+        }
+
+        function renderTop10s() {
+            renderInsightList('city-safe-list', cityData.slice(0, 10), 'Safe', 'bg-emerald-50 text-emerald-700', true);
+            renderInsightList('city-caution-list', [...cityData].reverse().slice(0, 10), 'Caution', 'bg-rose-50 text-rose-700', true);
+            renderInsightList('nbh-safe-list', neighborhoodData.slice(0, 10), 'Safe', 'bg-emerald-50 text-emerald-700', false);
+            renderInsightList('nbh-caution-list', [...neighborhoodData].reverse().slice(0, 10), 'Caution', 'bg-rose-50 text-rose-700', false);
+        }
+
+                function renderInsightList(id, data, label, badgeClass, isCity) {
+            const container = document.getElementById(id);
+            if (!container) return;
+            container.innerHTML = '';
+            
+            data.forEach((d, i) => {
+                if (!d.regions) return;
+                
+                let displayRank = i + 1;
+                if (label === 'Caution') {
+                    displayRank = (isCity ? cityData.length : neighborhoodData.length) - i;
+                }
+
+                const iValue = displayRank - 1;
+                const totalPool = isCity ? cityData.length : TARGET_COUNT;
+                const gradeData = getSafetyGrade(iValue, totalPool);
+                const percentile = Math.round(((totalPool - iValue) / totalPool) * 100);
+
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100 cursor-pointer text-xs ranking-card';
+                
+                item.onclick = function() {
+                    console.log('Clicked item:', d.regions.name, 'isCity:', isCity);
+                    if (d.regions.latitude && d.regions.longitude) {
+                        map.setView([d.regions.latitude, d.regions.longitude], isCity ? 11 : 15);
+                    }
+                    openDrawer(d, iValue, isCity);
+                };
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="grade-badge-sm ${gradeData.bg} ${gradeData.color} border border-slate-100">
+                            ${gradeData.grade}
+                        </div>
+                        <div class="flex flex-col">
+                            <div class="flex items-center gap-2">
+                                <span class="font-black text-slate-300 text-[10px]">#${displayRank}</span>
+                                <span class="uppercase font-bold text-slate-700 text-[10px] truncate max-w-[120px]">${d.regions.name}</span>
+                            </div>
+                            <span class="text-[8px] font-black text-indigo-400 uppercase tracking-tighter">${percentile}% Percentile</span>
+                        </div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-md text-[7px] font-black uppercase ${badgeClass}">${label}</span>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        async function handleSearch(e) {
+            const query = e.target.value.trim();
+            const resultsContainer = document.getElementById('search-results-container');
+
+            if (!query || query.length < 2) {
+                resultsContainer.style.display = 'none';
+                return;
+            }
+
+            const postcodeRegex = /^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$/i;
+
+            if (postcodeRegex.test(query)) {
+                resultsContainer.innerHTML = '<div class="p-4 text-center text-xs font-bold text-indigo-500 animate-pulse uppercase tracking-widest">Searching Postcode...</div>';        
+                resultsContainer.style.display = 'block';
+
+                try {
+                    const response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(query)}`);
+                    const data = await response.json();
+
+                    if (data.status === 200 && data.result) {
+                        const { latitude, longitude, postcode } = data.result;
+                        map.setView([latitude, longitude], 15);
+
+                        if (window.searchMarker) map.removeLayer(window.searchMarker);
+                        window.searchMarker = L.marker([latitude, longitude]).addTo(map)
+                            .bindPopup(`<div class="p-2 font-black uppercase text-xs">Postcode: ${postcode}</div>`)
+                            .openPopup();
+
+                        resultsContainer.style.display = 'none';
+                        return;
+                    } else {
+                        resultsContainer.innerHTML = '<div class="p-6 text-center text-xs font-bold text-rose-500 uppercase tracking-widest">Invalid Postcode</div>';
+                        resultsContainer.style.display = 'block';
+                        return;
+                    }
+                } catch (error) {
+                    console.error('Postcode search error:', error);
+                    resultsContainer.innerHTML = '<div class="p-6 text-center text-xs font-bold text-rose-500 uppercase tracking-widest">Error searching postcode</div>';
+                    resultsContainer.style.display = 'block';
+                    return;
+                }
+            }
+
+            const lowerQuery = query.toLowerCase();
+            const results = neighborhoodData
+                .filter(n => n.regions.name.toLowerCase().includes(lowerQuery) || n.cityName.toLowerCase().includes(lowerQuery))
+                .slice(0, 20);
+
+            resultsContainer.innerHTML = '';
+            if (results.length > 0) {
+                resultsContainer.style.display = 'block';
+                results.forEach(function(n) {
+                    const div = document.createElement('div');
+                    div.className = 'p-4 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 transition-all';
+                    div.onclick = function() {
+                        map.setView([n.regions.latitude, n.regions.longitude], 15);
+                        const rank = TARGET_COUNT - n.total_crimes;
+                        openDrawer(n, rank, false);
+                        resultsContainer.style.display = 'none';
+                    };
+                    div.innerHTML = `
+                        <div class="text-[10px] font-black text-indigo-500 uppercase tracking-wider">${n.cityName}</div>
+                        <div class="text-sm font-bold text-slate-800 uppercase">${n.regions.name}</div>
+                    `;
+                    resultsContainer.appendChild(div);
+                });
+            } else {
+                resultsContainer.innerHTML = '<div class="p-6 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">No results found</div>';
+                resultsContainer.style.display = 'block';
+            }
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!document.getElementById('master-search').contains(e.target)) {
+                document.getElementById('search-results-container').style.display = 'none';
+            }
+        });
+
+        loadData();
+    </script>
+
+    <!-- Journey Planner UI -->
+    <div id="journey-planner" class="fixed bottom-6 left-6 z-[1001] bg-white p-6 rounded-3xl shadow-2xl border border-slate-100 w-80">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="p-2 bg-indigo-600 rounded-lg">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+            </div>
+            <h3 class="text-sm font-black text-slate-800 uppercase italic">Safe-Route Scorer</h3>
+            <span class="ml-auto text-[8px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase">Safety Optimizer On</span>
+        </div>
+        
+        <div class="space-y-3">
+            <input type="text" id="route-start" placeholder="Start Postcode" class="w-full bg-slate-50 border border-slate-200 text-[10px] font-bold py-2 px-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 uppercase">
+            <input type="text" id="route-end" placeholder="End Postcode" class="w-full bg-slate-50 border border-slate-200 text-[10px] font-bold py-2 px-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 uppercase">
+            <button onclick="scoreJourney()" class="w-full bg-indigo-600 text-white text-[10px] font-black py-3 rounded-xl uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all">Score Journey</button>
+        </div>
+
+        <div id="route-score-container" class="hidden mt-4 pt-4 border-t border-slate-100">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Safety Badge</span>
+                <div id="route-score" class="px-3 py-1 rounded-full text-[10px] font-black uppercase">0%</div>
+            </div>
+            <p id="route-summary" class="text-[10px] font-bold text-slate-600 leading-tight uppercase"></p>
+            <div id="route-warning" class="hidden mt-2 p-2 bg-rose-50 border border-rose-100 rounded-lg">
+                <p class="text-[9px] font-black text-rose-600 uppercase leading-tight"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Intelligence Drawer -->
+    <div id="intel-drawer" class="translate-x-full">
+        <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div class="flex items-center gap-4">
+                <div id="drawer-grade-box" class="grade-badge">
+                    <span id="drawer-grade">-</span>
+                </div>
+                <div>
+                    <h2 id="drawer-name" class="text-lg font-black text-slate-800 uppercase leading-tight">Area Name</h2>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Intelligence Profile</p>
+                </div>
+            </div>
+            <button onclick="closeDrawer()" class="p-2 hover:bg-slate-200 rounded-full transition-all text-slate-400">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+            <div class="grid grid-cols-3 gap-3">
+                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                    <p class="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-tight">Safety<br>Rank</p>
+                    <p id="drawer-percentile" class="text-sm font-black text-slate-800">-</p>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                    <p class="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-tight">Official Yearly<br>Total</p>
+                    <p id="drawer-total-incidents" class="text-sm font-black text-slate-800">-</p>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-2xl border border-indigo-100 bg-indigo-50/30">
+                    <div class="flex items-center gap-1 mb-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                        <p class="text-[8px] font-black text-blue-600 uppercase tracking-widest leading-tight">Recent<br>Activity</p>
+                    </div>
+                    <p id="drawer-live-activity" class="text-sm font-black text-blue-700">0</p>
+                </div>
+            </div>
+
+            <!-- Trend Indicator -->
+            <div id="drawer-trend-container" class="mt-4 px-4 py-2 bg-slate-50/50 rounded-xl border border-slate-100 flex items-center justify-center">
+                <span class="text-[9px] font-bold text-slate-400 uppercase italic">Analyzing Trends...</span>
+            </div>
+            <div id="crime-breakdown-section" class="bg-slate-50 p-5 rounded-3xl border border-slate-100 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Crime Distribution Profile</h3>
+                    <div id="breakdown-loading" class="hidden flex items-center gap-1">
+                        <span class="w-1 h-1 rounded-full bg-indigo-500 animate-ping"></span>
+                        <span class="text-[8px] font-black text-indigo-500 uppercase">Analyzing</span>
+                    </div>
+                </div>
+                <div id="breakdown-container" class="space-y-3">
+                    <p id="breakdown-msg" class="text-[10px] font-medium text-slate-500 italic text-center">Select a city for detailed categorical breakdown.</p>
+                </div>
+            </div>
+
+            <div class="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100/50 relative overflow-hidden group">
+                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <svg class="w-12 h-12 text-indigo-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
+                </div>
+                <h3 class="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                    AI Safety Analyst
+                </h3>
+                <p id="drawer-ai-summary" class="text-xs font-medium text-slate-600 leading-relaxed italic">
+                    Analyzing area data zone dynamics...
+                </p>
+            </div>
+
+            <div>
+                <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 italic">Local Incident Feed</h3>
+                <div id="drawer-feed" class="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

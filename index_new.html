@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scotland Safety Finder | Full Intelligence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Marker Cluster -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Heatmap Plugin -->
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        #map { height: 600px; width: 100%; border-radius: 1.5rem; border: 1px solid #e2e8f0; background: #f8fafc; }
+        .custom-popup .leaflet-popup-content-wrapper { border-radius: 1rem; padding: 0.5rem; border: none; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .ranking-card:hover { transform: translateY(-2px); transition: all 0.2s ease; box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.1); }
+
+        #search-results-container {
+            position: absolute;
+            top: 70px;
+            right: 24px;
+            width: 320px;
+            max-height: 400px;
+            background: white;
+            z-index: 1001;
+            border-radius: 1.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            border: 1px solid #f1f5f9;
+            display: none;
+            overflow-y: auto;
+        }
+
+        .filter-chip {
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            background: #f1f5f9;
+            color: #64748b;
+            font-size: 0.625rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: 1px solid transparent;
+            z-index: 10;
+            position: relative;
+        }
+        .filter-chip:hover {
+            background: #e2e8f0;
+            color: #475569;
+        }
+        .filter-chip.active {
+            background: #4f46e5;
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
+        }
+        .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background-color: rgba(99, 102, 241, 0.6); }
+        .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background-color: rgba(99, 102, 241, 1); color: white; font-weight: 900; }
+
+        .grade-badge {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            font-size: 1.5rem;
+            font-weight: 900;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 2px solid white;
+        }
+        .grade-badge-sm {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 900;
+        }
+    </style>
+</head>
+<body class="bg-[#f8fafc] text-slate-900 leading-normal">
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-100 sticky top-0 z-[1000] px-6 py-4 shadow-sm">
+        <div class="container mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-100">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-tight text-slate-800 uppercase italic leading-none">Scotland Safety Finder</h1>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span id="connection-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        <p id="timeframe-label" class="text-[9px] font-black text-indigo-500 uppercase tracking-widest">Loading Analytics...</p> <p id="category-note" class="text-[9px] font-bold text-indigo-400 uppercase mt-2 hidden">City-level breakdown shown. Neighborhood zones use Overall Safety Rank.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-6">
+                <!-- Timeframe Selector -->
+                <div class="flex flex-col items-end">
+                    <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Select Analysis Period</span>
+                    <select id="year-selector" onchange="loadData()" class="bg-slate-50 border border-slate-200 text-[10px] font-black uppercase py-1.5 px-3 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer">
+                        <option value="Overall" selected>Overall (5-Year Average)</option>
+                        <option value="2024/2025">2024/2025 (Latest)</option>
+                        <option value="2023/2024">2023/2024</option>
+                        <option value="2022/2023">2022/2023</option>
+                        <option value="2021/2022">2021/2022</option>
+                        <option value="2020/2021">2020/2021</option>
+                    </select>
+                </div>
+                <div class="hidden lg:block w-32 h-1 bg-slate-100 rounded-full overflow-hidden">
+                    <div id="sync-bar" class="h-full bg-indigo-500 transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <div class="relative">
+                    <input type="text" id="master-search" onkeyup="handleSearch(event)" placeholder="Search street or city..." class="bg-slate-50 border border-slate-200 text-xs font-bold py-2.5 px-5 rounded-xl outline-none focus:ring-4 focus:ring-indigo-50 w-64 transition-all">
+                    <div id="search-results-container" class="custom-scrollbar"></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto py-10 px-6 space-y-12">
+        <!-- Map Section -->
+        <section class="bg-white p-4 rounded-[3rem] shadow-sm border border-slate-100 overflow-hidden relative">
+            <div class="px-8 py-6 border-b border-slate-50 mb-4">
+                <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div>
+                        <h2 class="text-xs font-black uppercase text-slate-400 tracking-[0.3em]">National Safety Radar</h2>
+                        <p class="text-[10px] font-bold text-slate-500 uppercase mt-1">Precise neighborhood monitoring (6,976 zones)</p> <p id="category-note" class="text-[9px] font-bold text-indigo-400 uppercase mt-2 hidden">City-level breakdown shown. Neighborhood zones use Overall Safety Rank.</p>
+                    </div>
+                    <div class="flex gap-4 text-[9px] font-black uppercase">
+                        <span class="flex items-center gap-1.5 text-emerald-600"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm"></span> Safe</span>
+                        <span class="flex items-center gap-1.5 text-rose-600"><span class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm"></span> Caution</span>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 mt-6">
+                    <button class="filter-chip active" onclick="toggleCategory('Total Crimes')">Total Crimes</button>
+                    <button class="filter-chip" onclick="toggleCategory('Violence')">Violence</button>
+                    <button class="filter-chip" onclick="toggleCategory('Dishonesty')">Dishonesty</button>
+                    <button class="filter-chip" onclick="toggleCategory('Damage')">Damage</button>
+                    <button class="filter-chip" onclick="toggleCategory('Antisocial')">Antisocial</button>
+                    <button class="filter-chip" onclick="toggleCategory('Society')">Society</button>
+                    <button class="filter-chip" onclick="toggleCategory('Sexual Crimes')">Sexual Crimes</button>
+
+                    <div class="flex items-center gap-1 ml-auto bg-slate-50 p-1 rounded-full border border-slate-100">
+                        <button onclick="toggleViewMode('markers')" data-mode="markers" class="view-mode-btn bg-indigo-600 text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-full transition-all">Markers</button>
+                        <button onclick="toggleViewMode('heatmap')" data-mode="heatmap" class="view-mode-btn bg-white text-slate-500 text-[8px] font-black uppercase px-3 py-1.5 rounded-full transition-all">Heatmap</button>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-full border border-slate-100">
+                        <input type="checkbox" id="show-incidents-toggle" onchange="renderMap()" class="w-3 h-3 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer">
+                        <label for="show-incidents-toggle" class="text-[9px] font-black text-slate-500 uppercase tracking-widest cursor-pointer">Show Live Reports</label>
+                    </div>
+                </div>
+            </div>
+            <div id="map"></div>
+        </section>
+
+        <!-- Insights -->
+        <section class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            <div class="xl:col-span-2 flex flex-col gap-12">
+                <!-- City Overview -->
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-black text-slate-800 tracking-tighter uppercase">City Overview <span id="city-count" class="text-sm font-bold text-slate-400 ml-2"></span></h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-emerald-500 shadow-sm">
+                            <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Safest Cities</h3>
+                            <div id="city-safe-list" class="space-y-2"></div>
+                        </div>
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-rose-500 shadow-sm">
+                            <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Caution Cities</h3>
+                            <div id="city-caution-list" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Micro-Spots -->
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-black text-slate-800 tracking-tighter uppercase">Micro-Spots <span id="nbh-count" class="text-sm font-bold text-slate-400 ml-2"></span></h2> 
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-emerald-500 shadow-sm">
+                            <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Safest Spots</h3>
+                            <div id="nbh-safe-list" class="space-y-2"></div>
+                        </div>
+                        <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-rose-500 shadow-sm">
+                            <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Caution Spots</h3>
+                            <div id="nbh-caution-list" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Intelligence -->
+            <div class="space-y-6">
+                <h2 class="text-2xl font-black text-slate-800 tracking-tighter uppercase italic">Intelligence</h2>
+                <div class="bg-white p-6 rounded-3xl border border-slate-100 border-t-4 border-t-indigo-500 shadow-sm h-[740px] flex flex-col">
+                    <h3 class="text-xs font-black text-slate-400 uppercase mb-4 tracking-widest italic">Live Feed</h3>
+                    <div id="intelligence-feed" class="space-y-4 overflow-y-auto custom-scrollbar flex-1 pr-2">
+                        <div class="p-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Awaiting Map Sync...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="container mx-auto py-10 text-center">
+        <p class="text-[10px] font-black uppercase text-slate-300 tracking-[0.3em]">Official Gov Data Aggregated | Scotland Safety Finder</p> <p id="category-note" class="text-[9px] font-bold text-indigo-400 uppercase mt-2 hidden">City-level breakdown shown. Neighborhood zones use Overall Safety Rank.</p>
+    </footer>
+
+    <!-- Intelligence Drawer -->
+    <div id="intel-drawer" class="fixed top-0 right-0 h-full w-full md:w-[450px] bg-white shadow-2xl z-[2100] transform translate-x-full transition-transform duration-300 ease-in-out border-l border-slate-100 flex flex-col">
+        <!-- Header -->
+        <div class="p-6 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+            <div class="flex items-center gap-4">
+                <div id="drawer-grade-badge" class="grade-badge bg-emerald-50 text-emerald-600 border-emerald-200">A+</div>
+                <div>
+                    <h2 id="drawer-area-name" class="text-xl font-black text-slate-800 tracking-tighter uppercase leading-tight">Area Name</h2>
+                    <p id="drawer-city-name" class="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1">City Name</p>
+                </div>
+            </div>
+            <button onclick="closeDrawer()" class="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+            <!-- Key Stats Grid -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Safety Percentile</p>
+                    <p id="drawer-percentile" class="text-2xl font-black text-slate-800">98%</p>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Total Incidents</p>
+                    <p id="drawer-incidents" class="text-2xl font-black text-slate-800">124</p>
+                </div>
+            </div>
+
+            <!-- Local Incident Feed -->
+            <div class="space-y-4">
+                <h3 class="text-xs font-black text-slate-400 uppercase tracking-widest italic">Local Incident Feed</h3>
+                <div id="drawer-incident-list" class="space-y-4">
+                    <!-- Items populated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://hunulwmlmeurkgpdkbhp.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1bnVsd21sbWV1cmtncGRrYmhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5Mzg4MDksImV4cCI6MjA5NDUxNDgwOX0.pNFwpAeocVRCE39EBZXJ7-HF-TXYBMt3ogEeANDsGsM';
+        const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const map = L.map('map', { zoomControl: true, scrollWheelZoom: true, attributionControl: false, preferCanvas: true }).setView([56.8, -4.2], 6);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
+        const markers = L.markerClusterGroup({ showCoverageOnHover: false });
+        map.addLayer(markers);
+        const mapCircles = new Map();
+
+        let cityData = [], neighborhoodData = [], filteredNbh = [], incidentsData = [];
+        let viewMode = 'markers';
+        let heatLayer = null;
+
+        function getSafetyGrade(rankIndex, total) {
+            const p = ((total - rankIndex) / total) * 100;
+            if (p >= 95) return { grade: 'A+', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+            if (p >= 80) return { grade: 'A', color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-200' };
+            if (p >= 60) return { grade: 'B', color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' };
+            if (p >= 40) return { grade: 'C', color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-200' };
+            if (p >= 20) return { grade: 'D', color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' };
+            return { grade: 'F', color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' };
+        }
+
+        function toggleViewMode(mode) {
+            viewMode = mode;
+            document.querySelectorAll('.view-mode-btn').forEach(btn => {
+                if (btn.getAttribute('data-mode') === mode) {
+                    btn.classList.add('bg-indigo-600', 'text-white');
+                    btn.classList.remove('bg-white', 'text-slate-500');
+                } else {
+                    btn.classList.remove('bg-indigo-600', 'text-white');
+                    btn.classList.add('bg-white', 'text-slate-500');
+                }
+            });
+            renderMap();
+        }
+        const incidentMarkers = L.layerGroup().addTo(map);
+        const TARGET_COUNT = 6976;
+        let currentCategory = 'Total Crimes';
+
+        async function loadData() {
+            const syncBar = document.getElementById('sync-bar');
+            const timeframeLabel = document.getElementById('timeframe-label');
+            const year = document.getElementById('year-selector').value;
+
+            try {
+                timeframeLabel.innerText = `Analyzing: ${year} (${currentCategory})`;
+                syncBar.style.width = "0%";
+
+                // Toggle category note visibility
+                document.querySelectorAll('[id="category-note"]').forEach(note => {
+                    if (currentCategory !== 'Total Crimes') {
+                        note.classList.remove('hidden');
+                    } else {
+                        note.classList.add('hidden');
+                    }
+                });
+
+                const { data: cities } = await client.from('crime_stats')
+                    .select('total_crimes, crime_rate, regions(name, id, latitude, longitude)')
+                    .eq('crime_type', currentCategory)
+                    .eq('period', year);
+
+                // Fetch latest incidents
+                const { data: incidents } = await client.from('incidents')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+                incidentsData = incidents || [];
+
+                cityData = (cities || [])
+                    .filter(c => c.regions && c.regions.name !== 'Scotland')
+                    .sort((a,b) => (a.crime_rate || 999) - (b.crime_rate || 999));
+
+                neighborhoodData = [];
+                let page = 0; const pageSize = 1000;
+                while (true) {
+                    const neighborhoodQueryType = 'Neighborhood Rank';
+                    const { data, error } = await client.from('crime_stats')
+                        .select('total_crimes, regions(name, id, latitude, longitude, parent_id)')
+                        .eq('crime_type', neighborhoodQueryType)
+                        .order('total_crimes', { ascending: false })
+                        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                    if (error || !data || data.length === 0) break;
+
+                    const batch = data.map(n => {
+                        if (!n.regions) return null;
+                        const parent = cityData.find(c => c.regions.id === n.regions.parent_id);
+                        return {
+                            ...n,
+                            cityName: parent ? parent.regions.name : 'Scotland Area'
+                        };
+                    }).filter(n => n !== null);
+
+                    neighborhoodData = [...neighborhoodData, ...batch];
+                    const progress = Math.min(Math.round((neighborhoodData.length / TARGET_COUNT) * 100), 100);
+                    syncBar.style.width = `${progress}%`;
+
+                    if (page === 0) { renderUI(); }
+                    if (data.length < pageSize) break;
+                    page++;
+                    await new Promise(r => setTimeout(r, 50));
+                }
+
+                renderUI();
+                document.getElementById('connection-dot').className = "w-2 h-2 rounded-full bg-green-500 border-2 border-white shadow-sm";
+                timeframeLabel.innerText = `Data Live: ${year} (${currentCategory})`;
+                document.getElementById('city-count').innerText = `(${cityData.length} Cities)`;
+                document.getElementById('nbh-count').innerText = `(${neighborhoodData.length} Zones)`;
+
+            } catch (err) { console.error(err); }
+        }
+
+        function getIncidentStatus(title) {
+            const t = title.toLowerCase();
+            if (t.includes('arrested') || t.includes('charged') || t.includes('jailed')) {
+                return { label: 'ARREST MADE', color: 'bg-emerald-100 text-emerald-700' };
+            }
+            if (t.includes('appeal') || t.includes('witnesses')) {
+                return { label: 'POLICE APPEAL', color: 'bg-indigo-100 text-indigo-700' };
+            }
+            if (t.includes('dealing with') || t.includes('closed') || t.includes('disperse')) {
+                return { label: 'ACTIVE INCIDENT', color: 'bg-amber-100 text-amber-700' };
+            }
+            return { label: 'REPORT FILED', color: 'bg-slate-100 text-slate-700' };
+        }
+
+        function toggleCategory(cat) {
+            currentCategory = cat;
+            document.querySelectorAll('.filter-chip').forEach(chip => {
+                if (chip.innerText === cat.toUpperCase()) {
+                    chip.classList.add('active');
+                } else {
+                    chip.classList.remove('active');
+                }
+            });
+            loadData();
+        }
+
+        function updateIntelligenceFeed() {
+            const container = document.getElementById('intelligence-feed');
+            if (!container) return;
+
+            const bounds = map.getBounds();
+            const visibleIncidents = incidentsData.filter(inc => {
+                if (!inc.latitude || !inc.longitude) return false;
+                return bounds.contains([inc.latitude, inc.longitude]);
+            }).slice(0, 15);
+
+            const displayData = visibleIncidents.length > 0 ? visibleIncidents : incidentsData.slice(0, 15);
+
+            if (displayData.length === 0) {
+                container.innerHTML = '<div class="p-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">No Recent Reports Found</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            displayData.forEach(inc => {
+                const status = getIncidentStatus(inc.title);
+                const item = document.createElement('div');
+                item.className = 'p-4 bg-slate-50/50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all cursor-pointer group';
+                item.onclick = () => {
+                    map.flyTo([inc.latitude, inc.longitude], 15);
+                };
+
+                item.innerHTML = `
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[8px] font-black ${status.color} px-2 py-0.5 rounded-full uppercase tracking-wider">${status.label}</span>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase">${new Date(inc.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <h4 class="text-xs font-bold text-slate-800 leading-tight mb-2 uppercase group-hover:text-indigo-600 transition-colors">${inc.title}</h4>
+                    <a href="${inc.url}" target="_blank" onclick="event.stopPropagation()" class="text-[9px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Source Report \u2192</a>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        map.on('moveend', updateIntelligenceFeed);
+
+        function openDrawer(data, rankIndex, isCity) {
+            const drawer = document.getElementById('intel-drawer');
+            const totalPool = isCity ? cityData.length : TARGET_COUNT;
+            const gradeData = getSafetyGrade(rankIndex, totalPool);
+            const percentile = Math.round(((totalPool - rankIndex) / totalPool) * 100);
+
+            document.getElementById('drawer-area-name').innerText = data.regions.name;
+            document.getElementById('drawer-city-name').innerText = isCity ? "Major City" : data.cityName;
+            
+            const gradeBadge = document.getElementById('drawer-grade-badge');
+            gradeBadge.innerText = gradeData.grade;
+            gradeBadge.className = `grade-badge ${gradeData.bg} ${gradeData.color} ${gradeData.border} border-2`;
+            
+            document.getElementById('drawer-percentile').innerText = `${percentile}%`;
+            document.getElementById('drawer-incidents').innerText = (data.total_crimes || 0).toLocaleString();
+
+            const incidentList = document.getElementById('drawer-incident-list');
+            incidentList.innerHTML = '';
+            
+            const areaName = data.regions.name.toLowerCase();
+            const city = (isCity ? data.regions.name : (data.cityName || '')).toLowerCase();
+            
+            const localIncidents = incidentsData.filter(inc => 
+                inc.title.toLowerCase().includes(areaName) || 
+                inc.title.toLowerCase().includes(city)
+            ).slice(0, 10);
+
+            if (localIncidents.length === 0) {
+                incidentList.innerHTML = '<p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center py-8">No specific reports for this area</p>';
+            } else {
+                localIncidents.forEach(inc => {
+                    const status = getIncidentStatus(inc.title);
+                    const item = document.createElement('div');
+                    item.className = 'p-4 bg-slate-50/50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all cursor-pointer group';
+                    item.onclick = () => {
+                        map.flyTo([inc.latitude, inc.longitude], 15);
+                    };
+                    item.innerHTML = `
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[8px] font-black ${status.color} px-2 py-0.5 rounded-full uppercase tracking-wider">${status.label}</span>
+                            <span class="text-[9px] font-bold text-slate-400 uppercase">${new Date(inc.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <h4 class="text-xs font-bold text-slate-800 leading-tight mb-2 uppercase group-hover:text-indigo-600 transition-colors">${inc.title}</h4>
+                        <a href="${inc.url}" target="_blank" onclick="event.stopPropagation()" class="text-[9px] font-black text-indigo-500 uppercase tracking-widest hover:underline">Source Report \u2192</a>
+                    `;
+                    incidentList.appendChild(item);
+                });
+            }
+
+            drawer.classList.remove('translate-x-full');
+        }
+
+        function closeDrawer() {
+            document.getElementById('intel-drawer').classList.add('translate-x-full');
+        }
+
+        function renderUI() {
+            renderMap();
+            renderTop10s();
+            updateIntelligenceFeed();
+        }
+
+        function renderMap() {
+            markers.clearLayers();
+            if (heatLayer) map.removeLayer(heatLayer);
+            mapCircles.clear();
+
+            if (viewMode === 'heatmap') {
+                const heatPoints = neighborhoodData
+                    .filter(n => n.regions.latitude)
+                    .map(n => [n.regions.latitude, n.regions.longitude, n.total_crimes / 1000]);
+                heatLayer = L.heatLayer(heatPoints, { radius: 25, blur: 15, maxZoom: 17 }).addTo(map);
+            } else {
+                neighborhoodData.forEach((n, i) => {
+                    if (n.regions.latitude) {
+                        const rankVal = n.total_crimes;
+                        const color = rankVal > 5000 ? '#10b981' : (rankVal > 2000 ? '#f59e0b' : '#ef4444');
+
+                        const marker = L.circleMarker([n.regions.latitude, n.regions.longitude], {
+                            radius: 8,
+                            fillColor: color,
+                            color: "#fff",
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        });
+
+                        markers.addLayer(marker);
+                        mapCircles.set(n.regions.id, marker);
+
+                        const rank = TARGET_COUNT - rankVal + 1;
+                        marker.on('click', () => openDrawer(n, rank - 1, false));
+
+                        const gradeData = getSafetyGrade(rank - 1, TARGET_COUNT);
+                        const popupContent = `
+                            <div class="p-4 min-w-[240px]">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <div class="text-[9px] font-black text-indigo-500 uppercase mb-1 tracking-wider">${n.cityName}</div>
+                                        <h4 class="text-sm font-black text-slate-800 leading-tight uppercase">Reported on or near ${n.regions.name}</h4>
+                                    </div>
+                                    <div class="grade-badge ${gradeData.bg} ${gradeData.color} ${gradeData.border} border-2">
+                                        ${gradeData.grade}
+                                    </div>
+                                </div>
+
+                                <div class="space-y-2 border-t border-slate-100 pt-3">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase">National Rank</span>
+                                        <span class="text-xs font-black text-slate-800">#${rank.toLocaleString()} / ${TARGET_COUNT.toLocaleString()}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase">Safety Rating</span>
+                                        <span class="text-[10px] font-black ${gradeData.color} uppercase">Top ${Math.round(((TARGET_COUNT - rank) / TARGET_COUNT) * 100)}% Safest</span>  
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        marker.bindPopup(popupContent, { className: 'custom-popup' });
+                    }
+                });
+            }
+
+            incidentMarkers.clearLayers();
+            if (document.getElementById('show-incidents-toggle')?.checked) {
+                incidentsData.forEach(inc => {
+                    if (inc.latitude && inc.longitude) {
+                        const status = getIncidentStatus(inc.title);
+                        const marker = L.marker([inc.latitude, inc.longitude], {
+                            icon: L.divIcon({
+                                className: 'custom-incident-marker',
+                                html: `<div class="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>`,
+                                iconSize: [16, 16],
+                                iconAnchor: [8, 8]
+                            })
+                        });
+
+                        const popupContent = `
+                            <div class="p-2 min-w-[220px]">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-[8px] font-black ${status.color} px-2 py-0.5 rounded-full uppercase tracking-wider">${status.label}</span>
+                                    <span class="text-[9px] font-bold text-slate-400 uppercase">${new Date(inc.created_at).toLocaleDateString()}</span>
+                                </div>
+                                <h4 class="text-sm font-black text-slate-800 leading-tight mb-2 uppercase">${inc.title}</h4>
+                                <a href="${inc.url}" target="_blank" class="block text-center bg-slate-50 hover:bg-slate-100 text-indigo-600 text-[10px] font-black py-2 rounded-lg transition-all uppercase tracking-widest border border-slate-100">View News Source</a>
+                            </div>
+                        `;
+                        marker.bindPopup(popupContent, { className: 'custom-popup' });
+                        incidentMarkers.addLayer(marker);
+                    }
+                });
+            }
+        }
+
+        function renderTop10s() {
+            renderInsightList('city-safe-list', cityData.slice(0, 10), 'Safe', 'bg-emerald-50 text-emerald-700', true);
+            renderInsightList('city-caution-list', [...cityData].reverse().slice(0, 10), 'Caution', 'bg-rose-50 text-rose-700', true);
+            renderInsightList('nbh-safe-list', neighborhoodData.slice(0, 10), 'Safe', 'bg-emerald-50 text-emerald-700', false);
+            renderInsightList('nbh-caution-list', [...neighborhoodData].reverse().slice(0, 10), 'Caution', 'bg-rose-50 text-rose-700', false);
+        }
+
+        function renderInsightList(id, data, label, badgeClass, isCity) {
+            const container = document.getElementById(id); container.innerHTML = '';
+            data.forEach((d, i) => {
+                let displayRank = i + 1;
+                if (label === 'Caution' && isCity) displayRank = cityData.length - i;
+                if (label === 'Caution' && !isCity) displayRank = neighborhoodData.length - i;
+
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100 cursor-pointer text-xs ranking-card';
+                item.onclick = function() {
+                    if(d.regions.latitude) {
+                        map.setView([d.regions.latitude, d.regions.longitude], isCity ? 11 : 15);
+                        if (!isCity) {
+                            const circle = mapCircles.get(d.regions.id);
+                            if (circle) circle.openPopup();
+                        }
+                        openDrawer(d, iValue, isCity);
+                    }
+                };
+                const iValue = displayRank - 1;
+                const totalPool = isCity ? cityData.length : TARGET_COUNT;
+                const gradeData = getSafetyGrade(iValue, totalPool);
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="grade-badge-sm ${gradeData.bg} ${gradeData.color} border border-slate-100">
+                            ${gradeData.grade}
+                        </div>
+                        <div class="flex flex-col">
+                            <div class="flex items-center gap-2">
+                                <span class="font-black text-slate-300 text-[10px]">#${displayRank}</span>
+                                <span class="uppercase font-bold text-slate-700 text-[10px] truncate max-w-[120px]">${d.regions.name}</span>
+                            </div>
+                            <span class="text-[8px] font-black text-indigo-400 uppercase tracking-tighter">${Math.round(((totalPool-iValue)/totalPool)*100)}% Percentile</span>
+                        </div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-md text-[7px] font-black uppercase ${badgeClass}">${label}</span>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        async function handleSearch(e) {
+            const query = e.target.value.trim();
+            const resultsContainer = document.getElementById('search-results-container');
+
+            if (!query || query.length < 2) {
+                resultsContainer.style.display = 'none';
+                return;
+            }
+
+            const postcodeRegex = /^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$/i;
+
+            if (postcodeRegex.test(query)) {
+                resultsContainer.innerHTML = '<div class="p-4 text-center text-xs font-bold text-indigo-500 animate-pulse uppercase tracking-widest">Searching Postcode...</div>';        
+                resultsContainer.style.display = 'block';
+
+                try {
+                    const response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(query)}`);
+                    const data = await response.json();
+
+                    if (data.status === 200 && data.result) {
+                        const { latitude, longitude, postcode } = data.result;
+                        map.setView([latitude, longitude], 15);
+
+                        if (window.searchMarker) map.removeLayer(window.searchMarker);
+                        window.searchMarker = L.marker([latitude, longitude]).addTo(map)
+                            .bindPopup(`<div class="p-2 font-black uppercase text-xs">Postcode: ${postcode}</div>`)
+                            .openPopup();
+
+                        resultsContainer.style.display = 'none';
+                        return;
+                    } else {
+                        resultsContainer.innerHTML = '<div class="p-6 text-center text-xs font-bold text-rose-500 uppercase tracking-widest">Invalid Postcode</div>';
+                        resultsContainer.style.display = 'block';
+                        return;
+                    }
+                } catch (error) {
+                    console.error('Postcode search error:', error);
+                    resultsContainer.innerHTML = '<div class="p-6 text-center text-xs font-bold text-rose-500 uppercase tracking-widest">Error searching postcode</div>';
+                    resultsContainer.style.display = 'block';
+                    return;
+                }
+            }
+
+            const lowerQuery = query.toLowerCase();
+            const results = neighborhoodData
+                .filter(n => n.regions.name.toLowerCase().includes(lowerQuery) || n.cityName.toLowerCase().includes(lowerQuery))
+                .slice(0, 20);
+
+            resultsContainer.innerHTML = '';
+            if (results.length > 0) {
+                resultsContainer.style.display = 'block';
+                results.forEach(function(n) {
+                    const div = document.createElement('div');
+                    div.className = 'p-4 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 transition-all';
+                    div.onclick = function() {
+                        map.setView([n.regions.latitude, n.regions.longitude], 15);
+                        const circle = mapCircles.get(n.regions.id);
+                        if (circle) circle.openPopup();
+                        resultsContainer.style.display = 'none';
+                        
+                        const rankVal = n.total_crimes;
+                        const rank = TARGET_COUNT - rankVal + 1;
+                        openDrawer(n, rank - 1, false);
+                    };
+                    div.innerHTML = `
+                        <div class="text-[10px] font-black text-indigo-500 uppercase tracking-wider">${n.cityName}</div>
+                        <div class="text-sm font-bold text-slate-800 uppercase">${n.regions.name}</div>
+                    `;
+                    resultsContainer.appendChild(div);
+                });
+            } else {
+                resultsContainer.innerHTML = '<div class="p-6 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">No results found</div>';
+                resultsContainer.style.display = 'block';
+            }
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!document.getElementById('master-search').contains(e.target)) {
+                document.getElementById('search-results-container').style.display = 'none';
+            }
+        });
+
+        loadData();
+    </script>
+</body>
+</html>
