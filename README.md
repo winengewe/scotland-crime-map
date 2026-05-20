@@ -29,6 +29,12 @@ Data is aggregated and normalized from official verified channels:
 ### **The Safety Scale**
 We use **Per Capita Normalization** to calculate safety grades (A+ to F). Areas are ranked against all 6,976 data zones in Scotland to ensure a quiet village and a busy city center are compared fairly.
 
+### **Understanding the Intelligence Layers**
+To provide the most accurate picture of safety, this platform uses two distinct data layers:
+
+1. **Major Incidents (The Area Feed):** This layer tracks "High-Signal" events such as police appeals, serious assaults, and major news stories. Minor crimes (like low-level antisocial behavior) are typically excluded from this feed to maintain clarity and focus on immediate threats.
+2. **Statistical Trends (The Safety Grade):** This layer uses aggregated government data (SIMD) to calculate the A+ to F grades. Unlike the feed, this includes **all reported crimes**, including minor ones like vandalism, shoplifting, and antisocial behavior, to give a long-term "baseline" safety profile of an area.
+
 ## 🛠️ Tech Stack
 
 - **Frontend:** HTML5, Tailwind CSS, JavaScript (ES6+).
